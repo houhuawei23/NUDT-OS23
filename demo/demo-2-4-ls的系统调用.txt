@@ -1,0 +1,149 @@
+本实验用到的命令汇总：
+--------------------------------------------------------------
+nudt@uvm:~/os/linux-0.11-lab/0/linux$ gdb tools/system -x ../../0.gdb
+(gdb) source ../../2-4.gdb
+(gdb) c
+(gdb) c
+(gdb) 
+(gdb) 
+(gdb) enable 3
+(gdb) c
+(gdb) 
+(gdb) 
+(gdb) 
+
+
+文件0.gdb的内容：
+--------------------------------------------------------------
+target remote localhost:1234
+handle SIGSEGV nostop noprint ignore
+b main
+display current->pid
+c
+
+
+文件2-4.gdb的内容：
+--------------------------------------------------------------
+b do_execve
+  commands
+    p current->start_code+filename
+  end
+
+b *0x7690 if current->pid != 0
+  commands
+    p $eax
+    si
+  end
+
+disable 3
+
+
+gdb侧的调试过程：
+--------------------------------------------------------------
+nudt@uvm:~/os/linux-0.11-lab/0/linux$ gdb tools/system -x ../../0.gdb
+GNU gdb (GDB) 7.6.1-ubuntu
+Copyright (C) 2013 Free Software Foundation, Inc.
+License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>
+This is free software: you are free to change and redistribute it.
+There is NO WARRANTY, to the extent permitted by law.  Type "show copying"
+and "show warranty" for details.
+This GDB was configured as "i686-linux-gnu".
+For bug reporting instructions, please see:
+<http://www.gnu.org/software/gdb/bugs/>...
+Reading symbols from /mnt/hgfs/u/os-exp/20spring-os/linux-0.11-lab/0/linux/tools/system...done.
+0x0000fff0 in find_entry (dir=0x0 <startup_32>, name=0x0 <startup_32>, 
+    namelen=0, res_dir=0x0 <startup_32>) at namei.c:149
+149			i++;
+Breakpoint 1 at 0x6799: file init/main.c, line 105.
+
+Breakpoint 1, main () at init/main.c:105
+105	{			/* The startup routine assumes (well, ...) this */
+1: current->pid = 0
+
+//执行预设的调试命令
+(gdb) source ../../2-4.gdb
+Breakpoint 2 at 0xed3d: file exec.c, line 190.
+Breakpoint 3 at 0x7690
+
+//跟踪可执行文件的运行
+(gdb) c
+Continuing.
+
+Breakpoint 2, do_execve (eip=0xffbfec, tmp=30359, filename=0x17cf0 "/bin/sh", 
+    argv=0x1bb40 <argv_rc>, envp=0x1bb48 <envp_rc>) at exec.c:190
+190	{
+1: current->pid = 2
+$1 = 0x8017cf0 "/bin/sh"
+  这是2号进程在执行命令解释器（以非交互方式）
+
+(gdb) c
+Continuing.
+
+Breakpoint 2, do_execve (eip=0xfbdfec, tmp=30359, filename=0x3ae80 "", 
+    argv=0x37dd0, envp=0x3ffc0) at exec.c:190
+190	{
+1: current->pid = 3
+$2 = 0xc03ae80 "/etc/update"
+  这是3号进程在执行update，此进程每30秒唤醒一次，执行sync操作，将高速缓冲区的内容刷新到硬盘。
+
+(gdb) 
+Continuing.
+
+Breakpoint 2, do_execve (eip=0xffdfec, tmp=30359, filename=0x17cf0 "/bin/sh", 
+    argv=0x1bb54 <argv>, envp=0x1bb5c <envp>) at exec.c:190
+190	{
+1: current->pid = 4
+$3 = 0x8017cf0 "/bin/sh"
+  4号进程在执行命令解释器，以交互方式
+
+<此时在虚拟机图形界面输入命令ls>
+
+(gdb) 
+Continuing.
+
+Breakpoint 2, do_execve (eip=0xfb6fec, tmp=30359, filename=0x37d60 "", 
+    argv=0x3a2a8, envp=0x3ffc0) at exec.c:190
+190	{
+1: current->pid = 6
+$4 = 0x10037d60 "/usr/bin/ls"
+  开始在6号进程中执行可执行文件ls
+
+//打开系统调用断点
+(gdb) enable 3
+
+//跟踪6号进程执行过的系统调用
+(gdb) c
+Continuing.
+
+Breakpoint 3, 0x00007690 in system_call ()
+1: current->pid = 6
+$5 = 13
+sys_time (tloc=0x0 <startup_32>) at sys.c:110
+110	{
+1: current->pid = 6
+  执行13号系统调用time
+
+(gdb) 
+Continuing.
+
+Breakpoint 3, 0x00007690 in system_call ()
+1: current->pid = 6
+$6 = 54
+sys_ioctl (fd=1, cmd=21505, arg=67108544) at ioctl.c:31
+31	{	
+1: current->pid = 6
+  执行54号系统调用ioctl
+
+(gdb) 
+Continuing.
+
+Breakpoint 3, 0x00007690 in system_call ()
+1: current->pid = 6
+$7 = 45
+sys_brk (end_data_seg=59408) at sys.c:185
+185		if (end_data_seg >= current->end_code &&
+1: current->pid = 6
+  执行45号系统调用brk
+
+(gdb) 
+

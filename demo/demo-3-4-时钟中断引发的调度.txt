@@ -1,0 +1,228 @@
+本实验用到的命令汇总：
+--------------------------------------------------------------
+nudt@uvm:~/os/linux-0.11-lab/1/linux$ gdb tools/system -x ../../0.gdb
+(gdb) b sched.c:336
+(gdb) b do_timer
+(gdb) display current->counter
+(gdb) c
+(gdb) display jiffies
+(gdb) c
+(gdb) c
+(gdb) c
+(gdb) c
+(gdb) c
+(gdb) c
+(gdb) 
+(gdb) 
+(gdb) 
+(gdb) 
+(gdb) 
+(gdb) 
+(gdb) 
+(gdb) 
+(gdb) 
+(gdb) 
+(gdb) p task[1]->state
+(gdb) 
+
+
+文件~/os/linux-0.11-lab/0.gdb的内容：
+--------------------------------------------------------------
+target remote localhost:1234
+handle SIGSEGV nostop noprint ignore
+b main
+display current->pid
+c
+
+
+gdb侧的调试过程：
+--------------------------------------------------------------
+nudt@uvm:~/os/linux-0.11-lab/1/linux$ gdb tools/system -x ../../0.gdb
+GNU gdb (GDB) 7.6.1-ubuntu
+Copyright (C) 2013 Free Software Foundation, Inc.
+License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>
+This is free software: you are free to change and redistribute it.
+There is NO WARRANTY, to the extent permitted by law.  Type "show copying"
+and "show warranty" for details.
+This GDB was configured as "i686-linux-gnu".
+For bug reporting instructions, please see:
+<http://www.gnu.org/software/gdb/bugs/>...
+Reading symbols from /mnt/hgfs/u/os-exp/20spring-os/linux-0.11-lab/1/linux/tools/system...done.
+0x0000fff0 in find_entry (dir=0x0 <startup_32>, name=0x0 <startup_32>, 
+    namelen=0, res_dir=0x0 <startup_32>) at namei.c:112
+112		if (namelen==2 && get_fs_byte(name)=='.' && get_fs_byte(name+1)=='.') {
+Breakpoint 1 at 0x680b: file init/main.c, line 112.
+
+Breakpoint 1, main () at init/main.c:112
+112	{			/* The startup routine assumes (well, ...) this */
+1: current->pid = 0
+
+(gdb) b sched.c:336
+Breakpoint 2 at 0x74c3: file sched.c, line 336.
+
+(gdb) b do_timer
+Breakpoint 3 at 0x73dd: file sched.c, line 307.
+
+(gdb) display current->counter
+2: current->counter = 15
+
+(gdb) c
+Continuing.
+
+Breakpoint 3, do_timer (cpl=3) at sched.c:307
+307	{
+2: current->counter = 15
+1: current->pid = 0
+
+(gdb) display jiffies
+3: jiffies = 1
+
+(gdb) c
+Continuing.
+
+Breakpoint 3, do_timer (cpl=3) at sched.c:307
+307	{
+3: jiffies = 2
+2: current->counter = 14
+1: current->pid = 0
+
+(gdb) c
+Continuing.
+
+Breakpoint 3, do_timer (cpl=3) at sched.c:307
+307	{
+3: jiffies = 3
+2: current->counter = 15
+1: current->pid = 1
+
+(gdb) c
+Continuing.
+
+Breakpoint 3, do_timer (cpl=3) at sched.c:307
+307	{
+3: jiffies = 4
+2: current->counter = 13
+1: current->pid = 0
+
+(gdb) c
+Continuing.
+
+Breakpoint 3, do_timer (cpl=3) at sched.c:307
+307	{
+3: jiffies = 5
+2: current->counter = 12
+1: current->pid = 0
+
+(gdb) c
+Continuing.
+
+Breakpoint 3, do_timer (cpl=3) at sched.c:307
+307	{
+3: jiffies = 6
+2: current->counter = 11
+1: current->pid = 0
+
+(gdb) c
+Continuing.
+
+Breakpoint 3, do_timer (cpl=3) at sched.c:307
+307	{
+3: jiffies = 7
+2: current->counter = 10
+1: current->pid = 0
+
+(gdb) 
+Continuing.
+
+Breakpoint 3, do_timer (cpl=3) at sched.c:307
+307	{
+3: jiffies = 8
+2: current->counter = 9
+1: current->pid = 0
+
+(gdb) 
+Continuing.
+
+Breakpoint 3, do_timer (cpl=3) at sched.c:307
+307	{
+3: jiffies = 9
+2: current->counter = 8
+1: current->pid = 0
+
+(gdb) 
+Continuing.
+
+Breakpoint 3, do_timer (cpl=3) at sched.c:307
+307	{
+3: jiffies = 10
+2: current->counter = 7
+1: current->pid = 0
+
+(gdb) 
+Continuing.
+
+Breakpoint 3, do_timer (cpl=3) at sched.c:307
+307	{
+3: jiffies = 11
+2: current->counter = 6
+1: current->pid = 0
+
+(gdb) 
+Continuing.
+
+Breakpoint 3, do_timer (cpl=3) at sched.c:307
+307	{
+3: jiffies = 12
+2: current->counter = 5
+1: current->pid = 0
+
+(gdb) 
+Continuing.
+
+Breakpoint 3, do_timer (cpl=3) at sched.c:307
+307	{
+3: jiffies = 13
+2: current->counter = 4
+1: current->pid = 0
+
+(gdb) 
+Continuing.
+
+Breakpoint 3, do_timer (cpl=3) at sched.c:307
+307	{
+3: jiffies = 14
+2: current->counter = 3
+1: current->pid = 0
+
+(gdb) 
+Continuing.
+
+Breakpoint 3, do_timer (cpl=3) at sched.c:307
+307	{
+3: jiffies = 15
+2: current->counter = 2
+1: current->pid = 0
+
+(gdb) 
+Continuing.
+
+Breakpoint 3, do_timer (cpl=3) at sched.c:307
+307	{
+3: jiffies = 16
+2: current->counter = 1
+1: current->pid = 0
+
+(gdb) 
+Continuing.
+
+Breakpoint 2, do_timer (cpl=3) at sched.c:336
+336		schedule();
+3: jiffies = 16
+2: current->counter = 0
+1: current->pid = 0
+
+(gdb) p task[1]->state
+$1 = 1
+
+(gdb) 
+

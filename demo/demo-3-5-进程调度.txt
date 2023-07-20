@@ -1,0 +1,231 @@
+本实验用到的命令汇总：
+--------------------------------------------------------------
+gdb tools/system -x ../../0.gdb
+(gdb) b schedule
+(gdb) c
+(gdb) display current->pid
+(gdb) bt
+(gdb) p task
+(gdb) p task[0]->counter
+(gdb) p task[1]->counter
+(gdb) p task[0]->state
+(gdb) p task[1]->state
+(gdb) b 136
+(gdb) c
+(gdb) p c
+(gdb) p next
+(gdb) c
+(gdb) c
+(gdb) bt
+(gdb) p task[1]->state
+(gdb) p task[0]->state
+(gdb) c
+(gdb) p next
+(gdb) p c
+(gdb) c
+(gdb) bt
+(gdb) p current->counter
+(gdb) p current->state
+(gdb) c
+(gdb) p next
+(gdb) p c
+(gdb) c
+(gdb) bt
+(gdb) 
+
+
+文件~/os/linux-0.11-lab/0.gdb的内容：
+--------------------------------------------------------------
+target remote localhost:1234
+b main
+c
+
+
+gdb侧的调试过程：
+--------------------------------------------------------------
+nudt@uvm:~/os/linux-0.11-lab/1/linux$ gdb tools/system -x ../../0.gdb
+GNU gdb (GDB) 7.6.1-ubuntu
+Copyright (C) 2013 Free Software Foundation, Inc.
+License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>
+This is free software: you are free to change and redistribute it.
+There is NO WARRANTY, to the extent permitted by law.  Type "show copying"
+and "show warranty" for details.
+This GDB was configured as "i686-linux-gnu".
+For bug reporting instructions, please see:
+<http://www.gnu.org/software/gdb/bugs/>...
+Reading symbols from /mnt/hgfs/u/os-exp/19spring-os/linux-0.11-lab/1/linux/tools/system...done.
+0x0000fff0 in find_entry (dir=0x0 <startup_32>, name=0x0 <startup_32>, namelen=0, 
+    res_dir=0x0 <startup_32>) at namei.c:112
+112		if (namelen==2 && get_fs_byte(name)=='.' && get_fs_byte(name+1)=='.') {
+Breakpoint 1 at 0x680b: file init/main.c, line 112.
+
+Breakpoint 1, main () at init/main.c:112
+112	{			/* The startup routine assumes (well, ...) this */
+
+//设置断点到调度函数处
+(gdb) b schedule
+Breakpoint 2 at 0x6df9: file sched.c, line 106.
+
+//跟踪到第一次调度
+(gdb) c
+Continuing.
+
+Breakpoint 2, schedule () at sched.c:106
+106	{
+
+//显示当前进程号，且每次调试暂停时都显示
+(gdb) display current->pid
+1: current->pid = 0
+
+//查看当前的函数调用栈
+(gdb) bt
+#0  schedule () at sched.c:106
+#1  0x00006fbb in sys_pause () at sched.c:148
+#2  0x000077af in system_call ()
+#3  0x00090080 in ?? ()
+//可见这次调度是由0号进程执行pause系统调用直接引发的。
+
+//查看当前进程状态
+(gdb) p task
+$1 = {0x1bec0 <init_task>, 0xfff000, 0x0 <startup_32> <repeats 62 times>}
+(gdb) p task[0]->counter
+$2 = 13
+(gdb) p task[1]->counter
+$3 = 15
+(gdb) p task[0]->state
+$4 = 1
+(gdb) p task[1]->state
+$5 = 0
+//可见只有1号进程处于就绪态
+
+//跟踪到选出新进程
+(gdb) b 136
+Breakpoint 3 at 0x6f1d: file sched.c, line 136.
+
+(gdb) c
+Continuing.
+
+Breakpoint 3, schedule () at sched.c:136
+136			if (c) break;
+1: current->pid = 0
+
+//查看新进程
+(gdb) p c
+$6 = 15
+
+(gdb) p next
+$7 = 1
+//可见选出了进程task[1]，对应1号进程
+
+//跟踪到第2次调度
+(gdb) c
+Continuing.
+
+Program received signal SIGSEGV, Segmentation fault.
+0x0000b15c in page_fault ()
+1: current->pid = 1
+
+(gdb) c
+Continuing.
+Can't send signals to this remote system.  SIGSEGV not sent.
+
+Breakpoint 2, schedule () at sched.c:106
+106	{
+1: current->pid = 1
+
+//查看函数调用栈
+(gdb) bt
+#0  schedule () at sched.c:106
+#1  0x00006fbb in sys_pause () at sched.c:148
+#2  0x000077af in system_call ()
+#3  0x00000001 in startup_32 ()
+//可见这是有1号进程执行pause系统调用引发的
+
+//查看进程当前状态
+(gdb) p task[1]->state
+$8 = 1
+
+(gdb) p task[0]->state
+$9 = 1
+//可见两个进程都处于睡眠态
+
+//跟踪到选出新进程
+(gdb) c
+Continuing.
+
+Breakpoint 3, schedule () at sched.c:136
+136			if (c) break;
+1: current->pid = 1
+
+(gdb) p next
+$10 = 0
+
+(gdb) p c
+$11 = -1
+//可见选出了0号进程（默认选择）
+
+//跟踪到第3次调度
+(gdb) c
+Continuing.
+
+Breakpoint 2, schedule () at sched.c:106
+106	{
+1: current->pid = 0
+
+//查看函数调用栈
+(gdb) bt
+#0  schedule () at sched.c:106
+#1  0x000077c0 in system_call ()
+#2  0x00000000 in ?? ()
+//可见这次调度是由系统调用总控函数引发的，查看源码可知是在系统调用返回之前，属延迟调度。
+
+//分析引发延迟调度的原因
+(gdb) p current->counter
+$12 = 13
+(gdb) p current->state
+$13 = 1
+//可见0号进程当前处于睡眠态，因此引发了本次调度。实际上0号进程的状态变为睡眠后，一直没改过。即使是被调度选中运行，也没有改过来。
+
+//继续运行，看此次调度的结果。此时1号进程也进入了睡眠态。
+(gdb) c
+Continuing.
+
+Breakpoint 3, schedule () at sched.c:136
+136			if (c) break;
+1: current->pid = 0
+
+(gdb) p next
+$14 = 0
+
+(gdb) p c
+$15 = -1
+//可见依然选中了0号进程，因此不会发生进程切换。
+
+//继续运行，查看第4次调度。
+(gdb) c
+Continuing.
+
+Breakpoint 2, schedule () at sched.c:106
+106	{
+1: current->pid = 0
+
+(gdb) bt
+#0  schedule () at sched.c:106
+#1  0x00006fbb in sys_pause () at sched.c:148
+#2  0x000077af in system_call ()
+#3  0x00090080 in ?? ()
+
+//可见这次调度是由0号进程再次执行pause系统调用引发的。
+
+(gdb) 
+
+/*总结一下，执行一个pause系统调用可能引发2次调度，过程如下：
+pause
+  int 0x80
+    system_call
+      sys_pause
+        schedule   //主动放弃，是非剥夺调度
+      [schedule]   //可能引发延迟调度
+      ret_from_sys_call
+      iret
+*/

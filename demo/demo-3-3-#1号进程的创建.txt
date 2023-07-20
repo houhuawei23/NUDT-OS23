@@ -1,0 +1,147 @@
+本实验用到的命令汇总：
+--------------------------------------------------------------
+gdb tools/system -x ../../0.gdb
+(gdb) b 145
+(gdb) c
+(gdb) n
+(gdb) p task
+(gdb) p current
+(gdb) display current->pid
+(gdb) p &task[0]->tss
+(gdb) x/16wx gdt
+(gdb) x/3i $eip
+(gdb) ni
+(gdb) x/3i $eip
+(gdb) ni
+(gdb) p task
+(gdb) p task[1]->pid
+(gdb) p/x task[1]->tss.eip
+(gdb) p/x &task[1]->tss
+(gdb) p sizeof(*task[1])
+(gdb) p/x task[1]->tss.esp0
+(gdb) x/16wx gdt
+(gdb) p current->pid
+(gdb) kill
+
+
+文件~/os/linux-0.11-lab/0.gdb的内容：
+--------------------------------------------------------------
+target remote localhost:1234
+b main
+c
+
+
+gdb侧的调试过程：
+--------------------------------------------------------------
+//跟踪到main
+nudt@uvm:~/os/linux-0.11-lab/1/linux$ gdb tools/system -x ../../0.gdb
+GNU gdb (GDB) 7.6.1-ubuntu
+Copyright (C) 2013 Free Software Foundation, Inc.
+License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>
+This is free software: you are free to change and redistribute it.
+There is NO WARRANTY, to the extent permitted by law.  Type "show copying"
+and "show warranty" for details.
+This GDB was configured as "i686-linux-gnu".
+For bug reporting instructions, please see:
+<http://www.gnu.org/software/gdb/bugs/>...
+Reading symbols from /mnt/hgfs/u/os-exp/19spring-os/linux-0.11-lab/1/linux/tools/system...done.
+0x0000fff0 in find_entry (dir=0x0 <startup_32>, name=0x0 <startup_32>, namelen=0, 
+    res_dir=0x0 <startup_32>) at namei.c:112
+112		if (namelen==2 && get_fs_byte(name)=='.' && get_fs_byte(name+1)=='.') {
+Breakpoint 1 at 0x680b: file init/main.c, line 112.
+
+Breakpoint 1, main () at init/main.c:112
+112	{			/* The startup routine assumes (well, ...) this */
+
+//跟踪到fork之前
+(gdb) b 145
+Breakpoint 2 at 0x6910: file init/main.c, line 145.
+
+(gdb) c
+Continuing.
+
+Breakpoint 2, main () at init/main.c:145
+145		move_to_user_mode();
+
+(gdb) n
+147		if (!fork()) {		/* we count on this going ok */
+
+//此时只有一个进程，即0号进程：
+(gdb) p task
+$1 = {0x1bec0 <init_task>, 0x0 <startup_32> <repeats 63 times>}
+
+(gdb) p current
+$2 = (struct task_struct *) 0x1bec0 <init_task>
+
+(gdb) display current->pid
+1: current->pid = 0
+//当前是0号进程
+
+//查看0号进程现场的位置
+(gdb) p &task[0]->tss
+$3 = (struct tss_struct *) 0x1c1a8 <init_task+744>
+
+(gdb) x/16wx gdt
+0x5cc0 <gdt>:	0x00000000	0x00000000	0x00000fff	0x00c09a00
+0x5cd0 <gdt+16>:	0x00000fff	0x00c09300	0x00000000	0x00000000
+0x5ce0 <gdt+32>:	0xc1a80068	0x00008b01	0xc1900068	0x00008201
+                        --------------------------
+                          ^4号描述符，起始地址0x0001c1a8，即task[0]->tss的地址
+0x5cf0 <gdt+48>:	0x00000000	0x00000000	0x00000000	0x00000000
+
+//跟踪到fork执行之后
+(gdb) x/3i $eip
+=> 0x692b <main+288>:	mov    $0x2,%eax
+   0x6930 <main+293>:	int    $0x80
+   0x6932 <main+295>:	mov    %eax,0x2c(%esp)
+
+(gdb) ni
+0x00006930 in fork () at init/main.c:24
+24	__always_inline _syscall0(int,fork)
+1: current->pid = 0
+
+(gdb) x/3i $eip
+=> 0x6930 <main+293>:	int    $0x80
+   0x6932 <main+295>:	mov    %eax,0x2c(%esp)
+   0x6936 <main+299>:	cmpl   $0x0,0x2c(%esp)
+
+(gdb) ni
+0x00006932	24	__always_inline _syscall0(int,fork)
+1: current->pid = 0
+//fork已执行完，仍处于0号进程
+
+(gdb) p task
+$4 = {0x1bec0 <init_task>, 0xfff000, 0x0 <startup_32> <repeats 62 times>}
+                            ^可见多了一个进程
+
+(gdb) p task[1]->pid
+$5 = 1
+//新进程是1号进程
+
+(gdb) p/x task[1]->tss.eip
+$6 = 0x6932
+       ^这是1号进程的第一条指令的位置，即int 0x80之后的那条汇编指令。
+
+(gdb) p/x &task[1]->tss
+$7 = 0xfff2e8
+       ^1号进程现场的位置
+
+(gdb) p sizeof(*task[1])
+$8 = 956
+
+(gdb) p/x task[1]->tss.esp0
+$9 = 0x1000000
+       ^1号进程的核心栈的位置，页面[0xfff000, 0x1000000)的低地址部分是1号进程的PCB（956字节），高地址部分是1号进程的核心栈（3140=4096-956字节）。
+
+(gdb) x/16wx gdt
+0x5cc0 <gdt>:	0x00000000	0x00000000	0x00000fff	0x00c09b00
+0x5cd0 <gdt+16>:	0x00000fff	0x00c09300	0x00000000	0x00000000
+0x5ce0 <gdt+32>:	0xc1a80068	0x00008b01	0xc1900068	0x00008201
+0x5cf0 <gdt+48>:	0xf2e80068	0x000089ff	0xf2d00068	0x000082ff
+                        --------------------------
+                         ^6号描述符，起始地址0x00fff2e8，即task[1]->tss的地址
+
+(gdb) p current->pid
+$10 = 0   //现在依然是0号进程在运行
+
+(gdb) kill

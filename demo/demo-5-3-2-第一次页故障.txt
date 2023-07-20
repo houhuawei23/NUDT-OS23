@@ -1,0 +1,271 @@
+演示：第一次页故障的处理过程
+对象：版本1内核
+
+本实验用到的命令汇总：
+--------------------------------------------------------------
+gdb tools/system -x ../../0.gdb
+(gdb) b *0x6932
+(gdb) c
+(gdb) p current->pid
+(gdb) c
+(gdb) p current->pid
+(gdb) x/5i $eip
+(gdb) info reg
+(gdb) si
+(gdb) x/19i $eip
+(gdb) b do_no_page
+(gdb) b do_wp_page
+(gdb) c
+(gdb) p/x address
+(gdb) x/20wx 0
+(gdb) p 0x22
+(gdb) x/35wx 0xffe000
+(gdb) bt
+(gdb) finish
+(gdb) x/35wx 0xffe000
+(gdb) x/1024wx 0xffd000
+(gdb) x/1024wx 0x22000
+(gdb) c
+(gdb) p current->pid
+(gdb) si
+(gdb) x/3i $eip
+(gdb) kill
+(gdb) quit
+
+
+文件~/os/linux-0.11-lab/0.gdb的内容：
+--------------------------------------------------------------
+target remote localhost:1234
+b main
+c
+
+
+gdb调试过程：
+--------------------------------------------------------------
+nudt@uvm:~/os/linux-0.11-lab/1/linux$ gdb tools/system -x ../../0.gdb
+GNU gdb (GDB) 7.6.1-ubuntu
+Copyright (C) 2013 Free Software Foundation, Inc.
+License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>
+This is free software: you are free to change and redistribute it.
+There is NO WARRANTY, to the extent permitted by law.  Type "show copying"
+and "show warranty" for details.
+This GDB was configured as "i686-linux-gnu".
+For bug reporting instructions, please see:
+<http://www.gnu.org/software/gdb/bugs/>...
+Reading symbols from /mnt/hgfs/u/os-exp/19spring-os/linux-0.11-lab/1/linux/tools/system...done.
+0x0000fff0 in find_entry (dir=0x0 <startup_32>, name=0x0 <startup_32>, namelen=0, 
+    res_dir=0x0 <startup_32>) at namei.c:112
+112		if (namelen==2 && get_fs_byte(name)=='.' && get_fs_byte(name+1)=='.') {
+Breakpoint 1 at 0x680b: file init/main.c, line 112.
+
+Breakpoint 1, main () at init/main.c:112
+112	{			/* The startup routine assumes (well, ...) this */
+
+//跟踪到fork系统调用中自陷指令的下一条，也是1号进程执行的第一条指令
+(gdb) b *0x6932
+Breakpoint 2 at 0x6932: file init/main.c, line 24.
+
+(gdb) c
+Continuing.
+
+Breakpoint 2, 0x00006932 in fork () at init/main.c:24
+24	__always_inline _syscall0(int,fork)
+
+(gdb) p current->pid
+$1 = 0
+//可见当前是0号进程在执行地址0x6932处的指令
+
+(gdb) c
+Continuing.
+
+Breakpoint 2, 0x00006932 in fork () at init/main.c:24
+24	__always_inline _syscall0(int,fork)
+//再次执行该指令
+
+(gdb) p current->pid
+$2 = 1
+//可见当前是1号进程在执行该指令
+
+(gdb) x/5i $eip
+=> 0x6932 <main+295>:	mov    %eax,0x2c(%esp)
+   0x6936 <main+299>:	cmpl   $0x0,0x2c(%esp)
+   0x693b <main+304>:	js     0x6943 <main+312>
+   0x693d <main+306>:	mov    0x2c(%esp),%eax
+   0x6941 <main+310>:	jmp    0x6953 <main+328>
+//这条指令要访问栈中的局部变量
+
+(gdb) info reg
+eax            0x0	0
+ecx            0x55f0	22000
+edx            0x21	33
+ebx            0x90080	589952
+esp            0x22bd0	0x22bd0 <user_stack+4016>
+ebp            0x22c0c	0x22c0c <user_stack+4076>
+esi            0x900a0	589984
+edi            0x21c20	138272
+eip            0x6932	0x6932 <main+295>
+eflags         0x202	[ IF ]
+cs             0xf	15
+ss             0x17	23
+ds             0x17	23
+es             0x17	23
+fs             0x17	23
+gs             0x17	23
+//当前栈顶位置是0x22bd0，因此上面指令访问的局部变量的地址是0x22bfc（=0x22bd0+0x2c）
+
+//执行此指令
+(gdb) si
+0x0000b15c in page_fault ()
+//可见进入了页故障的处理程序，说明上一条指令的执行引发了异常
+
+//查看页故障处理程序
+(gdb) x/19i $eip
+=> 0xb15c <page_fault>:	xchg   %eax,(%esp)
+   0xb15f <page_fault+3>:	push   %ecx
+   0xb160 <page_fault+4>:	push   %edx
+   0xb161 <page_fault+5>:	push   %ds
+   0xb162 <page_fault+6>:	push   %es
+   0xb163 <page_fault+7>:	push   %fs
+   0xb165 <page_fault+9>:	mov    $0x10,%edx
+   0xb16a <page_fault+14>:	mov    %edx,%ds
+   0xb16c <page_fault+16>:	mov    %edx,%es
+   0xb16e <page_fault+18>:	mov    %edx,%fs
+   0xb170 <page_fault+20>:	mov    %cr2,%edx
+   0xb173 <page_fault+23>:	push   %edx
+   0xb174 <page_fault+24>:	push   %eax
+   0xb175 <page_fault+25>:	test   $0x1,%eax
+   0xb17a <page_fault+30>:	jne    0xb183 <page_fault+39>
+   0xb17c <page_fault+32>:	call   0xae91 <do_no_page>
+   0xb181 <page_fault+37>:	jmp    0xb188 <page_fault+44>
+   0xb183 <page_fault+39>:	call   0xab80 <do_wp_page>
+   0xb188 <page_fault+44>:	add    $0x8,%esp
+//此程序会根据引发页故障的原因执行不同的C函数，如果页面不在内存，则执行do_no_page；如果页面写保护异常，则执行do_wp_page。
+
+//继续跟踪，看会执行到哪个其中的哪个函数
+(gdb) b do_no_page
+Breakpoint 3 at 0xae91: file memory.c, line 367.
+
+(gdb) b do_wp_page
+Breakpoint 4 at 0xab80: file memory.c, line 249.
+
+(gdb) c
+Continuing.
+
+Breakpoint 4, do_wp_page (error_code=7, address=67251196) at memory.c:249
+249	{
+//可见当前页故障是由”写保护异常“引发的
+
+//查看引发页故障的线性地址
+(gdb) p/x address
+$3 = 0x4022bfc
+
+//查看该地址对应的16（0x4022bfc的高10位）号页目录项
+(gdb) x/20wx 0
+0x0 <startup_32>:	0x00001027	0x00002007	0x00003007	0x00004027
+0x10 <startup_32+16>:	0x00000000	0x00000000	0x00000000	0x00000000
+0x20 <startup_32+32>:	0x00000000	0x00000000	0x00000000	0x00000000
+0x30 <startup_32+48>:	0x00000000	0x00000000	0x00000000	0x00000000
+0x40 <startup_32+64>:	0x00ffe027	0x00000000	0x00000000	0x00000000
+                          ^16号页目录项，其中的页帧号为0xffe
+(gdb) p 0x22
+$4 = 34
+
+//查看该地址对应的34（0x4022bfc的中间10位）号页表项
+(gdb) x/35wx 0xffe000
+0xffe000:	0x00000065	0x00001025	0x00002005	0x00003005
+0xffe010:	0x00004005	0x00005065	0x00006065	0x00007025
+0xffe020:	0x00008025	0x00009005	0x0000a025	0x0000b025
+0xffe030:	0x0000c005	0x0000d025	0x0000e005	0x0000f005
+0xffe040:	0x00010005	0x00011005	0x00012025	0x00013025
+0xffe050:	0x00014025	0x00015025	0x00016025	0x00017025
+0xffe060:	0x00018005	0x00019025	0x0001a005	0x0001b025
+0xffe070:	0x0001c065	0x0001d025	0x0001e025	0x0001f065
+0xffe080:	0x00020065	0x00021065	0x00022065
+                                                  ^34号页表项，其中的页帧号为0x22，其中的065表示该页面当前只能读，不能写
+
+//执行到当前函数执行完，届时页故障处理完成
+(gdb) bt
+#0  do_wp_page (error_code=7, address=67251196) at memory.c:249
+#1  0x0000b188 in page_fault ()
+#2  0x00000007 in startup_32 ()
+
+(gdb) finish
+Run till exit from #0  do_wp_page (error_code=7, address=67251196) at memory.c:249
+0x0000b188 in page_fault ()
+
+//再次查看线性地址0x4022bfc对应的页表项
+(gdb) x/35wx 0xffe000
+0xffe000:	0x00000065	0x00001025	0x00002005	0x00003005
+0xffe010:	0x00004005	0x00005065	0x00006065	0x00007025
+0xffe020:	0x00008025	0x00009005	0x0000a025	0x0000b025
+0xffe030:	0x0000c005	0x0000d025	0x0000e005	0x0000f005
+0xffe040:	0x00010005	0x00011005	0x00012025	0x00013025
+0xffe050:	0x00014025	0x00015025	0x00016025	0x00017025
+0xffe060:	0x00018005	0x00019025	0x0001a005	0x0001b025
+0xffe070:	0x0001c065	0x0001d025	0x0001e025	0x0001f065
+0xffe080:	0x00020065	0x00021065	0x00ffd007
+                                                  ^已改变，可写了，页帧号0xffd
+//查看对应页帧的内容
+(gdb) x/1024wx 0xffd000
+0xffd000:	0x00000000	0x00000000	0x00000000	0x00000000
+0xffd010:	0x00000000	0x00000000	0x00000000	0x00000000
+0xffd020:	0x00000000	0x00000000	0x00000000	0x00000000
+0xffd030:	0x00000000	0x00000000	0x00000000	0x00000000
+......
+0xffdb70:	0x00000000	0x00000031	0x5cf55b55	0x00006802
+0xffdb80:	0x00022b94	0x00000000	0x00000000	0x00000000
+0xffdb90:	0x00000000	0x00000021	0x00000027	0x00000011
+0xffdba0:	0x00000003	0x00000005	0x00000012	0xe3310000
+0xffdbb0:	0xe10b80a0	0x000060e0	0x00000040	0x0000691e
+0xffdbc0:	0x0000000f	0x00000202	0x00022bd0	0x000069ea
+0xffdbd0:	0x00400000	0xffffffff	0x00000000	0x00000000
+0xffdbe0:	0x00000000	0x00000000	0x00000000	0x00000000
+0xffdbf0:	0x00000000	0x00000000	0x00000000	0x00000001
+0xffdc00:	0x00000003	0x000e0000	0x00000ffc	0x0000013f
+0xffdc10:	0x00005412	0x00000000	0x00000000	0x00000000
+
+//查看原页帧的内容
+(gdb) x/1024wx 0x22000
+0x22000 <user_stack+992>:	0x00000000	0x00000000	0x00000000	0x00000000
+0x22010 <user_stack+1008>:	0x00000000	0x00000000	0x00000000	0x00000000
+0x22020 <user_stack+1024>:	0x00000000	0x00000000	0x00000000	0x00000000
+0x22030 <user_stack+1040>:	0x00000000	0x00000000	0x00000000	0x00000000
+......
+0x22b70 <user_stack+3920>:	0x00000000	0x00000031	0x5cf55b55	0x00006802
+0x22b80 <user_stack+3936>:	0x00022b94	0x00000000	0x00000000	0x00000000
+0x22b90 <user_stack+3952>:	0x00000000	0x00000021	0x00000027	0x00000011
+0x22ba0 <user_stack+3968>:	0x00000003	0x00000005	0x00000012	0xe3310000
+0x22bb0 <user_stack+3984>:	0xe10b80a0	0x000060e0	0x00000040	0x0000691e
+0x22bc0 <user_stack+4000>:	0x0000000f	0x00000202	0x00022bd0	0x000069ea
+0x22bd0 <user_stack+4016>:	0x00400000	0xffffffff	0x00000000	0x00000000
+0x22be0 <user_stack+4032>:	0x00000000	0x00000000	0x00000000	0x00000000
+0x22bf0 <user_stack+4048>:	0x00000000	0x00000000	0x00000000	0x00000001
+0x22c00 <user_stack+4064>:	0x00000003	0x000e0000	0x00000ffc	0x0000013f
+0x22c10 <user_stack+4080>:	0x00005412	0x00000000	0x00000000	0x00000000
+
+//可见上述两个页帧的内容是一样的（写时复制导致）
+
+//继续运行
+(gdb) c
+Breakpoint 2, 0x00006932 in fork () at init/main.c:24
+24	__always_inline _syscall0(int,fork)
+
+(gdb) p current->pid
+$5 = 1
+//可见1号进程重新执行断点指令（恢复点与断点的位置一样）
+
+//再次执行引发页故障的指令
+(gdb) si
+0x00006936	24	__always_inline _syscall0(int,fork)
+
+(gdb) x/3i $eip
+=> 0x6936 <main+299>:	cmpl   $0x0,0x2c(%esp)
+   0x693b <main+304>:	js     0x6943 <main+312>
+   0x693d <main+306>:	mov    0x2c(%esp),%eax
+//可见这次没有引发页故障了
+
+(gdb) kill
+Kill the program being debugged? (y or n) y
+(gdb) quit
+
+nudt@uvm:~/os/linux-0.11-lab/1/linux$ 

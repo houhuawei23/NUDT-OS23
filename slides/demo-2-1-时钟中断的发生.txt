@@ -1,0 +1,221 @@
+本实验用到的命令汇总：
+--------------------------------------------------------------
+(gdb) target remote localhost:1234
+(gdb) b main
+(gdb) c
+(gdb) b do_timer 
+(gdb) c
+(gdb) display jiffies 
+(gdb) c
+(gdb) c
+(gdb) c
+(gdb) c
+(gdb) c
+(gdb) finish 
+(gdb) disas 
+(gdb) si
+(gdb) si
+(gdb) disas
+(gdb) b *0x7805
+(gdb) c
+(gdb) si
+(gdb) disas
+(gdb) p/x $ecx
+(gdb) 
+
+
+gdb侧的调试过程：
+--------------------------------------------------------------
+nudt@uvm:~/os/linux-0.11-lab/1/linux$ gdb tools/system
+GNU gdb (GDB) 7.6.1-ubuntu
+Copyright (C) 2013 Free Software Foundation, Inc.
+License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>
+This is free software: you are free to change and redistribute it.
+There is NO WARRANTY, to the extent permitted by law.  Type "show copying"
+and "show warranty" for details.
+This GDB was configured as "i686-linux-gnu".
+For bug reporting instructions, please see:
+<http://www.gnu.org/software/gdb/bugs/>...
+Reading symbols from /mnt/hgfs/u/os-exp/20spring-os/linux-0.11-lab/1/linux/tools/system...done.
+
+(gdb) target remote localhost:1234
+Remote debugging using localhost:1234
+0x0000fff0 in find_entry (dir=0x0 <startup_32>, 
+    name=0x0 <startup_32>, namelen=0, res_dir=0x0 <startup_32>)
+    at namei.c:112
+112		if (namelen==2 && get_fs_byte(name)=='.' && get_fs_byte(name+1)=='.') {
+
+(gdb) 
+
+(gdb) b main
+Breakpoint 1 at 0x680b: file init/main.c, line 112.
+
+(gdb) c
+Continuing.
+
+Breakpoint 1, main () at init/main.c:112
+112	{			/* The startup routine assumes (well, ...) this */
+
+(gdb) b do_timer 
+Breakpoint 2 at 0x73dd: file sched.c, line 308.
+
+(gdb) c
+Continuing.
+
+Breakpoint 2, do_timer (cpl=3) at sched.c:308
+308	{
+
+(gdb) display jiffies 
+1: jiffies = 1
+//观察时钟中断发生时bochs虚拟机的输出
+
+(gdb) c
+Continuing.
+
+Breakpoint 2, do_timer (cpl=3) at sched.c:308
+308	{
+1: jiffies = 2
+
+(gdb) c
+Continuing.
+
+Program received signal SIGSEGV, Segmentation fault.
+0x0000b15c in page_fault ()
+1: jiffies = 2
+
+(gdb) c
+Continuing.
+Can't send signals to this remote system.  SIGSEGV not sent.
+
+Breakpoint 2, do_timer (cpl=3) at sched.c:308
+308	{
+1: jiffies = 3
+
+(gdb) c
+Continuing.
+
+Breakpoint 2, do_timer (cpl=3) at sched.c:308
+308	{
+1: jiffies = 4
+
+(gdb) c
+Continuing.
+
+Breakpoint 2, do_timer (cpl=3) at sched.c:308
+308	{
+1: jiffies = 5
+
+(gdb) finish 
+Run till exit from #0  do_timer (cpl=3) at sched.c:308
+0x00007893 in timer_interrupt ()
+1: jiffies = 5
+
+(gdb) disas 
+Dump of assembler code for function timer_interrupt:
+   0x00007864 <+0>:	push   %ds
+   0x00007865 <+1>:	push   %es
+   0x00007866 <+2>:	push   %fs
+   0x00007868 <+4>:	push   %edx
+   0x00007869 <+5>:	push   %ecx
+   0x0000786a <+6>:	push   %ebx
+   0x0000786b <+7>:	push   %eax
+   0x0000786c <+8>:	mov    $0x10,%eax
+   0x00007871 <+13>:	mov    %eax,%ds
+   0x00007873 <+15>:	mov    %eax,%es
+   0x00007875 <+17>:	mov    $0x17,%eax
+   0x0000787a <+22>:	mov    %eax,%fs
+   0x0000787c <+24>:	incl   0x1fc60
+   0x00007882 <+30>:	mov    $0x20,%al
+   0x00007884 <+32>:	out    %al,$0x20
+---Type <return> to continue, or q <return> to quit---
+   0x00007886 <+34>:	mov    0x20(%esp),%eax
+   0x0000788a <+38>:	and    $0x3,%eax
+   0x0000788d <+41>:	push   %eax
+   0x0000788e <+42>:	call   0x73dd <do_timer>
+=> 0x00007893 <+47>:	add    $0x4,%esp
+   0x00007896 <+50>:	jmp    0x77c0 <ret_from_sys_call>
+   0x0000789b <+55>:	nop
+End of assembler dump.
+
+(gdb) si
+0x00007896 in timer_interrupt ()
+1: jiffies = 5
+
+(gdb) si
+0x000077c0 in ret_from_sys_call ()
+1: jiffies = 5
+
+(gdb) disas
+Dump of assembler code for function ret_from_sys_call:
+=> 0x000077c0 <+0>:	mov    0x1cec0,%eax
+   0x000077c5 <+5>:	cmp    0x1cee0,%eax
+   0x000077cb <+11>:	je     0x77fd <ret_from_sys_call+61>
+   0x000077cd <+13>:	cmpw   $0xf,0x20(%esp)
+   0x000077d3 <+19>:	jne    0x77fd <ret_from_sys_call+61>
+   0x000077d5 <+21>:	cmpw   $0x17,0x2c(%esp)
+   0x000077db <+27>:	jne    0x77fd <ret_from_sys_call+61>
+   0x000077dd <+29>:	mov    0xc(%eax),%ebx
+   0x000077e0 <+32>:	mov    0x210(%eax),%ecx
+   0x000077e6 <+38>:	not    %ecx
+   0x000077e8 <+40>:	and    %ebx,%ecx
+   0x000077ea <+42>:	bsf    %ecx,%ecx
+   0x000077ed <+45>:	je     0x77fd <ret_from_sys_call+61>
+   0x000077ef <+47>:	btr    %ecx,%ebx
+   0x000077f2 <+50>:	mov    %ebx,0xc(%eax)
+---Type <return> to continue, or q <return> to quit---
+   0x000077f5 <+53>:	inc    %ecx
+   0x000077f6 <+54>:	push   %ecx
+   0x000077f7 <+55>:	call   0xa361 <do_signal>
+   0x000077fc <+60>:	pop    %eax
+   0x000077fd <+61>:	pop    %eax
+   0x000077fe <+62>:	pop    %ebx
+   0x000077ff <+63>:	pop    %ecx
+   0x00007800 <+64>:	pop    %edx
+   0x00007801 <+65>:	pop    %fs
+   0x00007803 <+67>:	pop    %es
+   0x00007804 <+68>:	pop    %ds
+   0x00007805 <+69>:	iret   
+   0x00007806 <+70>:	xchg   %ax,%ax
+End of assembler dump.
+
+//跟踪到iret指令
+(gdb) b *0x7805
+Breakpoint 3 at 0x7805
+
+(gdb) c
+Continuing.
+
+Breakpoint 3, 0x00007805 in ret_from_sys_call ()
+1: jiffies = 5
+
+//执行iret指令，回到恢复点
+(gdb) si
+0x00007994 in task0 ()
+1: jiffies = 5
+
+//查看恢复点指令
+(gdb) disas
+Dump of assembler code for function task0:
+   0x0000798b <+0>:	mov    $0x30,%al
+   0x0000798d <+2>:	int    $0x81
+   0x0000798f <+4>:	mov    $0xffff,%ecx
+=> 0x00007994 <+9>:	loop   0x7994 <task0+9>
+   0x00007996 <+11>:	mov    $0x20,%al
+   0x00007998 <+13>:	int    $0x81
+   0x0000799a <+15>:	mov    $0xffff,%ecx
+   0x0000799f <+20>:	loop   0x799f <task0+20>
+   0x000079a1 <+22>:	mov    $0x20,%al
+   0x000079a3 <+24>:	int    $0x81
+   0x000079a5 <+26>:	mov    $0xffff,%ecx
+   0x000079aa <+31>:	loop   0x79aa <task0+31>
+   0x000079ac <+33>:	ret    
+End of assembler dump.
+  可见恢复点指令为loop指令
+
+//分析断点指令
+(gdb) p/x $ecx
+$1 = 0xcf2f
+  可见断点也是loop指令，因为寄存器$ecx的初值为0xffff
+
+(gdb) 
+

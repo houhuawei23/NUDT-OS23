@@ -1,0 +1,177 @@
+本实验用到的命令汇总：
+--------------------------------------------------------------
+gdb tools/system -x ../../0.gdb
+(gdb) b task0
+(gdb) c
+(gdb) p current
+(gdb) p *current
+(gdb) p current->pid
+(gdb) p/x current->tss
+(gdb) p &current->tss
+(gdb) p sizeof(current->tss)
+(gdb) p gdt
+(gdb) x/10wx gdt
+(gdb) p sizeof(current->tss.i387)
+(gdb) p/x 212-108
+(gdb) kill
+(gdb) quit
+./rundbg
+<bochs:1> b 0x798b
+<bochs:2> c
+<bochs:3> sreg
+<bochs:4> quit
+
+
+预先创建文件0.gdb，放入启动后的常用调试命令，内容如下：
+--------------------------------------------------------------
+target remote localhost:1234
+b main
+c
+
+gdb侧的调试过程：
+--------------------------------------------------------------
+//启动gdb调试，使用上面的脚本
+nudt@uvm:~/os/linux-0.11-lab/1/linux$ gdb tools/system -x ../../0.gdb
+GNU gdb (GDB) 7.6.1-ubuntu
+Copyright (C) 2013 Free Software Foundation, Inc.
+License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>
+This is free software: you are free to change and redistribute it.
+There is NO WARRANTY, to the extent permitted by law.  Type "show copying"
+and "show warranty" for details.
+This GDB was configured as "i686-linux-gnu".
+For bug reporting instructions, please see:
+<http://www.gnu.org/software/gdb/bugs/>...
+Reading symbols from /mnt/hgfs/u/os-exp/19spring-os/linux-0.11-lab/1/linux/tools/system...done.
+0x0000fff0 in find_entry (dir=0x0 <startup_32>, name=0x0 <startup_32>, namelen=0, 
+    res_dir=0x0 <startup_32>) at namei.c:112
+112		if (namelen==2 && get_fs_byte(name)=='.' && get_fs_byte(name+1)=='.') {
+Breakpoint 1 at 0x680b: file init/main.c, line 112.
+
+Breakpoint 1, main () at init/main.c:112
+112	{			/* The startup routine assumes (well, ...) this */
+
+//跟踪到task0，此时是0号进程在执行。
+(gdb) b task0
+Breakpoint 2 at 0x798b
+
+(gdb) c
+Continuing.
+
+Breakpoint 2, 0x0000798b in task0 ()
+//可见当前的指令位置是0x798b
+
+//查看当前进程的进程控制块
+(gdb) p current
+$1 = (struct task_struct *) 0x1bec0 <init_task>
+
+(gdb) p *current
+$2 = {state = 0, counter = 15, priority = 15, signal = 0, sigaction = {{
+      sa_handler = 0x0 <startup_32>, sa_mask = 0, sa_flags = 0, 
+      sa_restorer = 0x0 <startup_32>} <repeats 32 times>}, blocked = 0, exit_code = 0, 
+  start_code = 0, end_code = 0, end_data = 0, brk = 0, start_stack = 0, pid = 0, 
+  father = -1, pgrp = 0, session = 0, leader = 0, uid = 0, euid = 0, suid = 0, gid = 0, 
+  egid = 0, sgid = 0, alarm = 0, utime = 0, stime = 0, cutime = 0, cstime = 0, 
+  start_time = 0, used_math = 0, tty = -1, umask = 18, pwd = 0x0 <startup_32>, 
+  root = 0x0 <startup_32>, executable = 0x0 <startup_32>, close_on_exec = 0, filp = {
+    0x0 <startup_32> <repeats 20 times>}, ldt = {{a = 0, b = 0}, {a = 159, b = 12647168}, {
+      a = 159, b = 12645120}}, tss = {back_link = 0, esp0 = 118464, ss0 = 16, esp1 = 0, 
+    ss1 = 0, esp2 = 0, ss2 = 0, cr3 = 0, eip = 0, eflags = 0, eax = 0, ecx = 0, edx = 0, 
+    ebx = 0, esp = 0, ebp = 0, esi = 0, edi = 0, es = 23, cs = 23, ss = 23, ds = 23, 
+    fs = 23, gs = 23, ldt = 40, trace_bitmap = -2147483648, i387 = {cwd = 0, swd = 0, 
+      twd = 0, fip = 0, fcs = 0, foo = 0, fos = 0, st_space = {0 <repeats 20 times>}}}}
+
+(gdb) p current->pid
+$3 = 0	//可见当前是0号进程
+
+//查看进程控制块中的进程现场
+(gdb) p/x current->tss
+$5 = {back_link = 0x0, esp0 = 0x1cec0, ss0 = 0x10, esp1 = 0x0, ss1 = 0x0, esp2 = 0x0, 
+  ss2 = 0x0, cr3 = 0x0, eip = 0x0, eflags = 0x0, eax = 0x0, ecx = 0x0, edx = 0x0, 
+  ebx = 0x0, esp = 0x0, ebp = 0x0, esi = 0x0, edi = 0x0, es = 0x17, cs = 0x17, ss = 0x17, 
+  ds = 0x17, fs = 0x17, gs = 0x17, ldt = 0x28, trace_bitmap = 0x80000000, i387 = {
+    cwd = 0x0, swd = 0x0, twd = 0x0, fip = 0x0, fcs = 0x0, foo = 0x0, fos = 0x0, 
+    st_space = {0x0 <repeats 20 times>}}}
+//可见其中包括了很多寄存器的状态，其中核心栈的位置是0x10:0x1cec0
+
+//查看0号进程的进程现场（tss）的地址和长度
+(gdb) p &current->tss
+$6 = (struct tss_struct *) 0x1c1a8 <init_task+744>
+
+(gdb) p sizeof(current->tss)
+$7 = 212
+
+//查看gdt的地址和内容
+(gdb) p gdt
+
+$11 = {<text variable, no debug info>} 0x5cc0 <gdt>
+
+(gdb) x/10wx gdt
+0x5cc0 <gdt>:	0x00000000	0x00000000	0x00000fff	0x00c09b00
+0x5cd0 <gdt+16>:	0x00000fff	0x00c09300	0x00000000	0x00000000
+0x5ce0 <gdt+32>:	0xc1a80068	0x00008b01
+                          ----            --    --
+                          ^从这里开始是4号描述符的，其中记录的TSS段的起始地址为0x0001c1a8，就是前面看到的task[0]->tss的地址。其中的0x0068为这个段的长度。
+
+//tss.i387记录的是数学协处理器的状态，不会在现场自动保存和恢复时被访问
+(gdb) p sizeof(current->tss.i387)
+$12 = 108
+
+(gdb) p/x 212-108
+$13 = 0x68
+//可见gdt[4]中记录的TSS段的大小0x68就是指TSS除i387成员以外的大小。
+
+//现在换一种调试模式，观察CPU内的特殊寄存器的值。
+//启动bochsdbg调试模式：
+(gdb) kill
+Kill the program being debugged? (y or n) y
+
+(gdb) quit
+nudt@uvm:~/os/linux-0.11-lab/1/linux$ 
+
+nudt@uvm:~/os/linux-0.11-lab$ ./rundbg
+========================================================================
+                       Bochs x86 Emulator 2.6.9
+               Built from SVN snapshot on April 9, 2017
+                  Compiled on May 11 2017 at 21:37:36
+========================================================================
+00000000000i[      ] BXSHARE not set. using compile time default '/usr/local/share/bochs'
+00000000000i[      ] reading configuration from conf/0.11.bxrc
+00000000000i[      ] installing x module as the Bochs GUI
+00000000000i[      ] using log file bochsout.txt
+Next at t=0
+(0) [0x0000fffffff0] f000:fff0 (unk. ctxt): jmpf 0xf000:e05b          ; ea5be000f0
+
+//跟踪到前面调试到的位置task0
+<bochs:1> b 0x798b
+
+<bochs:2> c
+(0) Breakpoint 1, 0x0000798b in ?? ()
+Next at t=116117541
+(0) [0x00000000798b] 000f:0000798b (unk. ctxt): mov al, 0x30              ; b030
+
+//查看TR和GDTR寄存器的状态
+<bochs:3> sreg
+es:0x0017, dh=0x00c0f300, dl=0x0000009f, valid=1
+	Data segment, base=0x00000000, limit=0x0009ffff, Read/Write, Accessed
+cs:0x000f, dh=0x00c0fb00, dl=0x0000009f, valid=1
+	Code segment, base=0x00000000, limit=0x0009ffff, Execute/Read, Non-Conforming, Accessed, 32-bit
+ss:0x0017, dh=0x00c0f300, dl=0x0000009f, valid=7
+	Data segment, base=0x00000000, limit=0x0009ffff, Read/Write, Accessed
+ds:0x0017, dh=0x00c0f300, dl=0x0000009f, valid=1
+	Data segment, base=0x00000000, limit=0x0009ffff, Read/Write, Accessed
+fs:0x0017, dh=0x00c0f300, dl=0x0000009f, valid=1
+	Data segment, base=0x00000000, limit=0x0009ffff, Read/Write, Accessed
+gs:0x0017, dh=0x00c0f300, dl=0x0000009f, valid=1
+	Data segment, base=0x00000000, limit=0x0009ffff, Read/Write, Accessed
+ldtr:0x0028, dh=0x00008201, dl=0xc1900068, valid=1
+tr:0x0020, dh=0x00008b01, dl=0xc1a80068, valid=1
+     ^指向gdt[4]
+     ^对应2进制0010 0000，去掉低3位后值为4.
+gdtr:base=0x00005cc0, limit=0x7ff
+                ^指向gdt，与前面用gdb调试时得到的gdt地址一致
+idtr:base=0x000054c0, limit=0x7ff
+
+<bochs:4> quit
+(0).[116117541] [0x00000000798b] 000f:0000798b (unk. ctxt): mov al, 0x30              ; b030
+nudt@uvm:~/os/linux-0.11-lab$ 
+

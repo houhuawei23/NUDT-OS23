@@ -1,0 +1,108 @@
+//演示：read系统调用的工作过程
+
+本实验用到的命令汇总：
+--------------------------------------------------------------
+gdb tools/system -x ../../0.gdb
+(gdb) b sys_read
+(gdb) c
+(gdb) c
+(gdb) b file_read 
+(gdb) c
+(gdb) p *filp
+(gdb) p *inode
+(gdb) b bread
+(gdb) c
+(gdb) quit
+
+
+文件~/os/linux-0.11-lab/0.gdb的内容：
+--------------------------------------------------------------
+target remote localhost:1234
+b main
+c
+
+
+gdb调试过程：
+--------------------------------------------------------------
+nudt@uvm:~/os/linux-0.11-lab/2/linux$ gdb tools/system -x ../../0.gdb
+GNU gdb (GDB) 7.6.1-ubuntu
+Copyright (C) 2013 Free Software Foundation, Inc.
+License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>
+This is free software: you are free to change and redistribute it.
+There is NO WARRANTY, to the extent permitted by law.  Type "show copying"
+and "show warranty" for details.
+---Type <return> to continue, or q <return> to quit---This GDB was configured as "i686-linux-gnu".
+For bug reporting instructions, please see:
+<http://www.gnu.org/software/gdb/bugs/>...
+Reading symbols from /mnt/hgfs/u/os-exp/18autumn-os/linux-0.11-lab/2/linux/tools/system...done.
+0x0000fff0 in add_entry (dir=0x0 <startup_32>, 
+    name=0x0 <startup_32>, namelen=0, 
+    res_dir=0x0 <startup_32>) at namei.c:182
+182		if (!(block = dir->i_zone[0]))
+Breakpoint 1 at 0x6799: file init/main.c, line 105.
+
+Breakpoint 1, main () at init/main.c:105
+105	{			/* The startup routine assumes (well, ...) this */
+
+(gdb) b sys_read
+Breakpoint 2 at 0xb7db: file read_write.c, line 56.
+
+(gdb) c
+Continuing.
+
+Breakpoint 2, sys_read (fd=0, 
+    buf=0x22e4b <user_stack+3915> "", count=1)
+    at read_write.c:56
+56	{
+
+(gdb) c
+Continuing.
+
+Breakpoint 2, sys_read (fd=3, 
+    buf=0x22e4b <user_stack+3915> "", count=80)
+    at read_write.c:56
+56	{
+//文件描述符3，对应于文件hello.c
+
+(gdb) b file_read 
+Breakpoint 3 at 0xe20d: file file_dev.c, line 18.
+
+(gdb) c
+Continuing.
+
+Breakpoint 3, file_read (
+    inode=0x21710 <inode_table+336>, 
+    filp=0x23750 <file_table+16>, 
+    buf=0x22e4b <user_stack+3915> "", count=80)
+    at file_dev.c:18
+18	{
+
+(gdb) p *filp
+$1 = {f_mode = 32896, f_flags = 0, f_count = 1, 
+  f_inode = 0x21710 <inode_table+336>, f_pos = 0}
+//当前位置f_pos为0，即文件的最前面
+
+(gdb) p *inode
+$2 = {i_mode = 32896, i_uid = 0, i_size = 96, 
+  i_mtime = 1513893402, i_gid = 0 '\000', 
+  i_nlinks = 2 '\002', i_zone = {251, 0, 0, 0, 0, 0, 
+    0, 0, 0}, i_wait = 0x0 <startup_32>, 
+  i_atime = 1540034614, i_ctime = 0, i_dev = 768, 
+  i_num = 69, i_count = 1, i_lock = 0 '\000', 
+  i_dirt = 0 '\000', i_pipe = 0 '\000', 
+  i_mount = 0 '\000', i_seek = 0 '\000', 
+  i_update = 0 '\000'}
+//69号i节点，对应于文件hello.c。第一个数据块号为251，因此文件内区域[0,+80)属于这一块。
+
+(gdb) b bread
+Breakpoint 4 at 0xcef8: file buffer.c, line 271.
+
+(gdb) c
+Continuing.
+
+Breakpoint 4, bread (dev=768, block=251)
+    at buffer.c:271
+271	{
+//读hello.c的第一个数据块
+
+(gdb) quit

@@ -1,0 +1,211 @@
+演示5.1：#0进程和#1进程的代码段的起始地址
+分析对象：版本1内核
+
+
+本实验用到的命令汇总：
+--------------------------------------------------------------
+cat 1/linux/System.map | grep current
+cat 1/linux/System.map | grep init_task
+./rundbg
+<bochs:1> b 0x6932
+<bochs:2> c
+<bochs:3> x/wx 0x1cec0
+<bochs:4> reg    
+<bochs:5> sreg
+<bochs:6> u/5 0xf:0x6932
+<bochs:7> x/16wx 0x5cc0
+<bochs:8> x/6wx 0x1c190
+<bochs:9> c
+<bochs:10> x/wx 0x1cec0
+<bochs:11> reg 
+<bochs:12> sreg
+<bochs:13> x/16wx 0x5cc0
+<bochs:14> x/6wx 0xfff2d0
+<bochs:15> u/5 0xf:0x6932
+<bochs:16> quit
+
+
+调试过程：
+--------------------------------------------------------------
+//查看变量current的地址
+nudt@uvm:~/os/linux-0.11-lab$ cat 1/linux/System.map | grep current
+0001cec0 D current
+0001cfe8 D current_DOR
+0001d1ac d current_track
+00021a77 b current_drive
+//可见为0x1cec0
+
+//查看0号进程的进程控制块的地址
+nudt@uvm:~/os/linux-0.11-lab$ cat 1/linux/System.map | grep init_task
+0001bec0 d init_task
+nudt@uvm:~/os/linux-0.11-lab$ 
+//可见为0x1bec0
+
+//启动bochsdbg调试
+nudt@uvm:~/os/linux-0.11-lab$ ./rundbg
+========================================================================
+                       Bochs x86 Emulator 2.6.9
+               Built from SVN snapshot on April 9, 2017
+                  Compiled on May 11 2017 at 21:37:36
+========================================================================
+00000000000i[      ] BXSHARE not set. using compile time default '/usr/local/share/bochs'
+00000000000i[      ] reading configuration from conf/0.11.bxrc
+00000000000i[      ] installing x module as the Bochs GUI
+00000000000i[      ] using log file bochsout.txt
+Next at t=0
+(0) [0x0000fffffff0] f000:fff0 (unk. ctxt): jmpf 0xf000:e05b          ; ea5be000f0
+
+//跟踪到第一次执行0x6932处的指令
+<bochs:1> b 0x6932
+
+<bochs:2> c
+(0) Breakpoint 1, 0x00006932 in ?? ()
+Next at t=116117533
+(0) [0x000000006932] 000f:00006932 (unk. ctxt): mov dword ptr ss:[esp+44], eax ; 8944242c
+
+//查看当前进程
+<bochs:3> x/wx 0x1cec0
+[bochs]:
+0x0001cec0 <bogus+       0>:    0x0001bec0
+可见是0号进程
+
+//查看通用寄存器
+<bochs:4> reg    
+eax: 0x00000001 1
+ecx: 0x000055f0 22000
+edx: 0x00000021 33
+ebx: 0x00090080 589952
+esp: 0x00022bd0 142288
+ebp: 0x00022c0c 142348
+esi: 0x000900a0 589984
+edi: 0x00021c20 138272
+eip: 0x00006932
+eflags 0x00000202: id vip vif ac vm rf nt IOPL=0 of df IF tf sf zf af pf cf
+//可见寄存器eip的值为0x6932
+
+//查看段寄存器
+<bochs:5> sreg
+es:0x0017, dh=0x00c0f300, dl=0x0000009f, valid=1
+    Data segment, base=0x00000000, limit=0x0009ffff, Read/Write, Accessed
+cs:0x000f, dh=0x00c0fb00, dl=0x0000009f, valid=1
+    Code segment, base=0x00000000, limit=0x0009ffff, Execute/Read, Non-Conforming, Accessed, 32-bit
+ss:0x0017, dh=0x00c0f300, dl=0x0000009f, valid=1
+    Data segment, base=0x00000000, limit=0x0009ffff, Read/Write, Accessed
+ds:0x0017, dh=0x00c0f300, dl=0x0000009f, valid=1
+    Data segment, base=0x00000000, limit=0x0009ffff, Read/Write, Accessed
+fs:0x0017, dh=0x00c0f300, dl=0x0000009f, valid=1
+    Data segment, base=0x00000000, limit=0x0009ffff, Read/Write, Accessed
+gs:0x0017, dh=0x00c0f300, dl=0x0000009f, valid=1
+    Data segment, base=0x00000000, limit=0x0009ffff, Read/Write, Accessed
+ldtr:0x0028, dh=0x00008201, dl=0xc1900068, valid=1
+tr:0x0020, dh=0x00008b01, dl=0xc1a80068, valid=1
+gdtr:base=0x00005cc0, limit=0x7ff
+idtr:base=0x000054c0, limit=0x7ff
+//可见cs寄存器的值为0xf
+
+//反汇编逻辑地址0xf:0x6932处的指令，即当前指令
+<bochs:6> u/5 0xf:0x6932
+00006932: (                    ): mov dword ptr ss:[esp+44], eax ; 8944242c
+00006936: (                    ): cmp dword ptr ss:[esp+44], 0x00000000 ; 837c242c00
+0000693b: (                    ): js .+6                    ; 7806
+0000693d: (                    ): mov eax, dword ptr ss:[esp+44] ; 8b44242c
+00006941: (                    ): jmp .+16                  ; eb10
+//可见该逻辑地址对应的线性地址为0x00006932。
+
+//ldtr寄存器的值为0x0028，指向gdt[5]
+//查看GDT
+<bochs:7> x/16wx 0x5cc0
+[bochs]:
+0x00005cc0 <bogus+       0>:    0x00000000    0x00000000    0x00000fff    0x00c09b00
+0x00005cd0 <bogus+      16>:    0x00000fff    0x00c09300    0x00000000    0x00000000
+0x00005ce0 <bogus+      32>:    0xc1a80068    0x00008b01    0xc1900068    0x00008201
+                                                            ------------------------
+                                                              ^gdt[5], 基地址：0x0001c190
+0x00005cf0 <bogus+      48>:    0xf2e80068    0x000089ff    0xf2d00068    0x000082ff
+//可见gdt[5]中记录的LDT的起始地址为0x1c190
+
+//查看LDT
+<bochs:8> x/6wx 0x1c190
+[bochs]:
+0x0001c190 <bogus+       0>:    0x00000000    0x00000000    0x0000009f    0x00c0fb00
+0x0001c1a0 <bogus+      16>:    0x0000009f    0x00c0f300
+//可见ldt[1]中记录的代码段的起始地址为0，因此才有上面的结论，即逻辑地址0xf:0x6932对应到线性地址0x6932。
+
+//继续运行，跟踪到第二次执行0x6932处指令
+<bochs:9> c
+(0) Breakpoint 1, 0x04006932 in ?? ()
+Next at t=116315456
+(0) [0x000000006932] 000f:00006932 (unk. ctxt): mov dword ptr ss:[esp+44], eax ; 8944242c
+
+//查看当前进程
+<bochs:10> x/wx 0x1cec0
+[bochs]:
+0x0001cec0 <bogus+       0>:    0x00fff000
+//可见当前是1号进程在运行
+
+//查看通用寄存器
+<bochs:11> reg 
+eax: 0x00000000 0
+ecx: 0x000055f0 22000
+edx: 0x00000021 33
+ebx: 0x00090080 589952
+esp: 0x00022bd0 142288
+ebp: 0x00022c0c 142348
+esi: 0x000900a0 589984
+edi: 0x00021c20 138272
+eip: 0x00006932
+eflags 0x00000202: id vip vif ac vm rf nt IOPL=0 of df IF tf sf zf af pf cf
+//可见eip的值依然为0x6932
+
+//查看段寄存器
+<bochs:12> sreg
+es:0x0017, dh=0x04c0f300, dl=0x0000009f, valid=1
+    Data segment, base=0x04000000, limit=0x0009ffff, Read/Write, Accessed
+cs:0x000f, dh=0x04c0fb00, dl=0x0000009f, valid=1
+    Code segment, base=0x04000000, limit=0x0009ffff, Execute/Read, Non-Conforming, Accessed, 32-bit
+ss:0x0017, dh=0x04c0f300, dl=0x0000009f, valid=1
+    Data segment, base=0x04000000, limit=0x0009ffff, Read/Write, Accessed
+ds:0x0017, dh=0x04c0f300, dl=0x0000009f, valid=1
+    Data segment, base=0x04000000, limit=0x0009ffff, Read/Write, Accessed
+fs:0x0017, dh=0x04c0f300, dl=0x0000009f, valid=1
+    Data segment, base=0x04000000, limit=0x0009ffff, Read/Write, Accessed
+gs:0x0017, dh=0x04c0f300, dl=0x0000009f, valid=1
+    Data segment, base=0x04000000, limit=0x0009ffff, Read/Write, Accessed
+ldtr:0x0038, dh=0x000082ff, dl=0xf2d00068, valid=1
+tr:0x0030, dh=0x00008bff, dl=0xf2e80068, valid=1
+gdtr:base=0x00005cc0, limit=0x7ff
+idtr:base=0x000054c0, limit=0x7ff
+//可见cs的值还是0xf，但是代码段的基地址已经变为了0x4000000，即64M。同时，ldtr变为了0x38，指向gdt[7]。
+
+//查看GDT
+<bochs:13> x/16wx 0x5cc0
+[bochs]:
+0x00005cc0 <bogus+       0>:    0x00000000    0x00000000    0x00000fff    0x00c09b00
+0x00005cd0 <bogus+      16>:    0x00000fff    0x00c09300    0x00000000    0x00000000
+0x00005ce0 <bogus+      32>:    0xc1a80068    0x00008901    0xc1900068    0x00008201
+0x00005cf0 <bogus+      48>:    0xf2e80068    0x00008bff    0xf2d00068    0x000082ff
+                                                            ------------------------
+                                                             ^gdt[7], 基地址：0x00fff2d0
+//可知当前LDT的起始地址为0xfff2d0
+
+//查看当前LDT（1号进程的LDT）
+<bochs:14> x/6wx 0xfff2d0
+[bochs]:
+0x00fff2d0 <bogus+       0>:    0x00000000    0x00000000    0x0000009f    0x04c0fb00
+                                                            ------------------------
+                                                             ^ldt[1], 基地址：0x04000000
+0x00fff2e0 <bogus+      16>:    0x0000009f    0x04c0f300
+//可见当前代码段的基地址为0x4000000，即64M。
+
+//反汇编逻辑地址0xf:0x6932，即当前指令
+<bochs:15> u/5 0xf:0x6932
+04006932: (                    ): mov dword ptr ss:[esp+44], eax ; 8944242c
+04006936: (                    ): cmp dword ptr ss:[esp+44], 0x00000000 ; 837c242c00
+0400693b: (                    ): js .+6                    ; 7806
+0400693d: (                    ): mov eax, dword ptr ss:[esp+44] ; 8b44242c
+04006941: (                    ): jmp .+16                  ; eb10
+//可见该逻辑地址对应的线性地址为0x4006932。
+
+<bochs:16> quit
+(0).[116315456] [0x000000006932] 000f:00006932 (unk. ctxt): mov dword ptr ss:[esp+44], eax ; 8944242c
+nudt@uvm:~/os/linux-0.11-lab$ 

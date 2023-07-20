@@ -1,0 +1,411 @@
+//演示：open系统调用的工作过程
+
+本实验用到的命令汇总：
+--------------------------------------------------------------
+gdb tools/system -x ../../0.gdb
+(gdb) b sys_open
+(gdb) c
+(gdb) c
+(gdb) b open_namei
+(gdb) c
+(gdb) b dir_namei
+(gdb) c
+(gdb) b find_entry
+(gdb) c
+(gdb) p *dir
+(gdb) p **dir
+(gdb) b bread
+(gdb) c
+(gdb) b match
+(gdb) c
+(gdb) p *de
+(gdb) commands 7
+(gdb) c
+(gdb) c
+(gdb) c
+(gdb) c
+(gdb) c
+(gdb) b iget
+(gdb) c
+(gdb) b read_inode
+(gdb) c
+(gdb) command 9
+(gdb) p *inode
+(gdb) c
+(gdb) c
+(gdb) p *dir
+(gdb) p **dir
+(gdb) commands 5
+(gdb) c
+(gdb) c
+(gdb) 
+(gdb) 
+(gdb) b namei.c:409
+(gdb) c
+(gdb) p *res_inode
+(gdb) p **res_inode
+(gdb) b open.c:184
+(gdb) c
+(gdb) p fd
+(gdb) p current->filp[3]
+(gdb) p *current->filp[3]
+(gdb) p *current->filp[3]->f_inode
+(gdb) 
+
+
+文件~/os/linux-0.11-lab/0.gdb的内容：
+--------------------------------------------------------------
+target remote localhost:1234
+b main
+c
+
+
+gdb侧的调试过程：
+--------------------------------------------------------------
+nudt@uvm:~/os/linux-0.11-lab/2/linux$ gdb tools/system -x ../../0.gdb
+GNU gdb (GDB) 7.6.1-ubuntu
+Copyright (C) 2013 Free Software Foundation, Inc.
+License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>
+This is free software: you are free to change and redistribute it.
+There is NO WARRANTY, to the extent permitted by law.  Type "show copying"
+and "show warranty" for details.
+This GDB was configured as "i686-linux-gnu".
+For bug reporting instructions, please see:
+<http://www.gnu.org/software/gdb/bugs/>...
+Reading symbols from /mnt/hgfs/u/os-exp/18autumn-os/linux-0.11-lab/2/linux/tools/system...done.
+0x0000fff0 in add_entry (dir=0x0 <startup_32>, 
+    name=0x0 <startup_32>, namelen=0, 
+    res_dir=0x0 <startup_32>) at namei.c:182
+182		if (!(block = dir->i_zone[0]))
+Breakpoint 1 at 0x6799: file init/main.c, line 105.
+
+Breakpoint 1, main () at init/main.c:105
+105	{			/* The startup routine assumes (well, ...) this */
+
+(gdb) b sys_open
+Breakpoint 2 at 0xb32f: file open.c, line 139.
+
+(gdb) c
+Continuing.
+
+Breakpoint 2, sys_open (filename=0x17c2b "/dev/tty0", 
+    flag=2, mode=0) at open.c:139
+139	{
+//这次打开的是设备文件tty0
+
+(gdb) c
+Continuing.
+
+Breakpoint 2, sys_open (
+    filename=0x17c5b "/usr/root/hello.c", flag=0, mode=0)
+    at open.c:139
+139	{
+//将打开文件hello.c
+
+(gdb) b open_namei
+Breakpoint 3 at 0x1055f: file namei.c, line 339.
+
+(gdb) c
+Continuing.
+
+Breakpoint 3, open_namei (
+    pathname=0x17c5b "/usr/root/hello.c", flag=0, mode=0, 
+    res_inode=0xffffb4) at namei.c:339
+339	{
+//将获取文件hello.c的i节点
+
+(gdb) b dir_namei
+Breakpoint 4 at 0x103ca: file namei.c, line 280.
+
+(gdb) c
+Continuing.
+
+Breakpoint 4, dir_namei (
+    pathname=0x17c5b "/usr/root/hello.c", 
+    namelen=0xffff7c, name=0xffff80) at namei.c:280
+280	{
+//将获取目录/usr/root/的i节点
+
+(gdb) b find_entry
+Breakpoint 5 at 0xfd83: file namei.c, line 93.
+
+(gdb) c
+Continuing.
+
+Breakpoint 5, find_entry (dir=0xffff08, 
+    name=0x17c5c "usr/root/hello.c", namelen=3, 
+    res_dir=0xffff04) at namei.c:93
+93	{
+//将获取根目录的目录项usr
+//根目录的i节点号固定为1，之前在初始化时已经获取到，已传给参数dir，内容如下：
+(gdb) p *dir
+$1 = (struct m_inode *) 0x21058 <inode_table+56>
+
+(gdb) p **dir
+$2 = {i_mode = 16877, i_uid = 0, i_size = 128, i_mtime = 2217650846, i_gid = 0 '\000', i_nlinks = 8 '\b', i_zone = {19, 0, 0, 0, 0, 0, 0, 0, 0}, i_wait = 0x0 <startup_32>, i_atime = 0, i_ctime = 0, i_dev = 768, i_num = 1, i_count = 5, i_lock = 0 '\000', i_dirt = 0 '\000', i_pipe = 0 '\000', i_mount = 0 '\000', i_seek = 0 '\000', i_update = 0 '\000'}
+//可见根目录的第一个数据块号为19
+
+(gdb) b bread
+Breakpoint 6 at 0xcef8: file buffer.c, line 271.
+
+(gdb) c
+Continuing.
+
+Breakpoint 6, bread (dev=768, block=19) at buffer.c:271
+271	{
+//读取根目录的第一个数据块（19号块）
+
+(gdb) b match
+Breakpoint 7 at 0xfd1b: file namei.c, line 64.
+
+(gdb) c
+Continuing.
+
+Breakpoint 7, match (len=3, 
+    name=0x17c5c "usr/root/hello.c", de=0x3fe800)
+    at namei.c:64
+64	{
+
+(gdb) p *de
+$3 = {inode = 1, name = ".", '\000' <repeats 12 times>}
+//分析第一个目录项是否匹配‘usr’
+
+(gdb) commands 7
+Type commands for breakpoint(s) 7, one per line.
+End with a line saying just "end".
+>p *de
+>end
+//使在断点7被捕获时自动显示de所指内容
+
+(gdb) c
+Continuing.
+
+Breakpoint 7, match (len=3, 
+    name=0x17c5c "usr/root/hello.c", de=0x3fe810)
+    at namei.c:64
+64	{
+$4 = {inode = 1, name = "..", '\000' <repeats 11 times>}
+//分析第2个目录项
+
+(gdb) c
+Continuing.
+
+Breakpoint 7, match (len=3, 
+    name=0x17c5c "usr/root/hello.c", de=0x3fe820)
+    at namei.c:64
+64	{
+$5 = {inode = 2, 
+  name = "bin\000\000\000\000\000\000\000\000\000\000"}
+//分析第3个目录项
+
+(gdb) c
+Continuing.
+
+Breakpoint 7, match (len=3, 
+    name=0x17c5c "usr/root/hello.c", de=0x3fe830)
+    at namei.c:64
+64	{
+$6 = {inode = 6, 
+  name = "dev\000\000\000\000\000\000\000\000\000\000"}
+//第4个目录项
+
+(gdb) c
+Continuing.
+
+Breakpoint 7, match (len=3, 
+    name=0x17c5c "usr/root/hello.c", de=0x3fe840)
+    at namei.c:64
+64	{
+$7 = {inode = 25, 
+  name = "etc\000\000\000\000\000\000\000\000\000\000"}
+//第5个目录项
+
+(gdb) c
+Continuing.
+
+Breakpoint 7, match (len=3, 
+    name=0x17c5c "usr/root/hello.c", de=0x3fe850)
+    at namei.c:64
+64	{
+$8 = {inode = 30, 
+  name = "usr\000\000\000\000\000\000\000\000\000\000"}
+//第6个目录项，匹配到了，此目录项的i节点号为30
+
+(gdb) b iget
+Breakpoint 8 at 0xc3f8: file inode.c, line 245.
+
+(gdb) c
+Continuing.
+
+Breakpoint 8, iget (dev=768, nr=30) at inode.c:245
+245	{
+//获取30号i节点
+
+(gdb) b read_inode
+Breakpoint 9 at 0xc5bd: file inode.c, line 295.
+
+(gdb) c
+Continuing.
+
+Breakpoint 9, read_inode (inode=0x216a0 <inode_table+224>)
+    at inode.c:295
+295	{
+
+(gdb) command 9
+Type commands for breakpoint(s) 9, one per line.
+End with a line saying just "end".
+>p *inode
+>end
+
+(gdb) p *inode
+$9 = {i_mode = 0, i_uid = 0, i_size = 0, i_mtime = 0, 
+  i_gid = 0 '\000', i_nlinks = 0 '\000', i_zone = {0, 0, 
+    0, 0, 0, 0, 0, 0, 0}, i_wait = 0x0 <startup_32>, 
+  i_atime = 0, i_ctime = 0, i_dev = 768, i_num = 30, 
+  i_count = 1, i_lock = 0 '\000', i_dirt = 0 '\000', 
+  i_pipe = 0 '\000', i_mount = 0 '\000', 
+  i_seek = 0 '\000', i_update = 0 '\000'}
+//其中为初始值，待填入真实值
+
+(gdb) c
+Continuing.
+
+Breakpoint 6, bread (dev=768, block=4) at buffer.c:271
+271	{
+//获取第一个i节点块（i节点区从4号块开始，一个i节点块可以容纳32个i节点）
+
+(gdb) c
+Continuing.
+
+Breakpoint 5, find_entry (dir=0xffff08, 
+    name=0x17c60 "root/hello.c", namelen=4, 
+    res_dir=0xffff04) at namei.c:93
+93	{
+
+(gdb) p *dir
+$10 = (struct m_inode *) 0x216a0 <inode_table+224>
+
+(gdb) p **dir
+$11 = {i_mode = 16877, i_uid = 0, i_size = 80, 
+  i_mtime = 695433600, i_gid = 0 '\000', 
+  i_nlinks = 5 '\005', i_zone = {405, 0, 0, 0, 0, 0, 0, 0, 
+    0}, i_wait = 0x0 <startup_32>, i_atime = 0, 
+  i_ctime = 0, i_dev = 768, i_num = 30, i_count = 1, 
+  i_lock = 0 '\000', i_dirt = 0 '\000', i_pipe = 0 '\000', 
+  i_mount = 0 '\000', i_seek = 0 '\000', 
+  i_update = 0 '\000'}
+//此i节点即为30号i节点，其第一个数据块号为405
+
+(gdb) commands 5
+Type commands for breakpoint(s) 5, one per line.
+End with a line saying just "end".
+>p **dir
+>end
+
+(gdb) c
+Continuing.
+
+Breakpoint 6, bread (dev=768, block=405) at buffer.c:271
+271	{
+//读入目录'/usr'的第一个数据块
+
+(gdb) c
+Continuing.
+
+Breakpoint 7, match (len=4, name=0x17c60 "root/hello.c", 
+    de=0x3fe000) at namei.c:64
+64	{
+$12 = {inode = 30, name = ".", '\000' <repeats 12 times>}
+//将第一个目录项与'root'匹配
+
+(gdb) 
+Continuing.
+
+Breakpoint 7, match (len=4, name=0x17c60 "root/hello.c", 
+    de=0x3fe010) at namei.c:64
+64	{
+$13 = {inode = 1, name = "..", '\000' <repeats 11 times>}
+//第2个目录项
+
+(gdb) 
+Continuing.
+
+Breakpoint 7, match (len=4, name=0x17c60 "root/hello.c", 
+    de=0x3fe020) at namei.c:64
+64	{
+$14 = {inode = 31, 
+  name = "bin\000\000\000\000\000\000\000\000\000\000"}
+//第3个目录项
+
+//.......
+
+//跟踪到函数open_namei执行完
+(gdb) b namei.c:409
+Breakpoint 10 at 0x108a8: file namei.c, line 409.
+
+(gdb) c
+Continuing.
+
+Breakpoint 10, open_namei (
+    pathname=0x17c5b "/usr/root/hello.c", flag=0, 
+    mode=32768, res_inode=0xffffb4) at namei.c:409
+409		return 0;
+
+(gdb) p *res_inode
+$25 = (struct m_inode *) 0x21710 <inode_table+336>
+
+(gdb) p **res_inode
+$26 = {i_mode = 32896, i_uid = 0, i_size = 96, 
+  i_mtime = 1513893402, i_gid = 0 '\000', 
+  i_nlinks = 2 '\002', i_zone = {251, 0, 0, 0, 0, 0, 0, 0, 
+    0}, i_wait = 0x0 <startup_32>, i_atime = 1539968966, 
+  i_ctime = 0, i_dev = 768, i_num = 69, i_count = 1, 
+  i_lock = 0 '\000', i_dirt = 0 '\000', i_pipe = 0 '\000', 
+  i_mount = 0 '\000', i_seek = 0 '\000', 
+  i_update = 0 '\000'}
+//此即为文件hello.c的i节点，可见其第一个数据块号为251
+
+//跟踪到sys_open函数执行完
+(gdb) b open.c:184
+Breakpoint 11 at 0xb5c8: file open.c, line 184.
+
+(gdb) c
+Continuing.
+
+Breakpoint 11, sys_open (
+    filename=0x17c5b "/usr/root/hello.c", flag=0, mode=0)
+    at open.c:184
+184		return (fd);
+
+(gdb) p fd
+$27 = 3
+//可见分配给文件hello.c的描述符为3号描述符
+
+//查看3号描述符的内容
+(gdb) p current->filp[3]
+$28 = (struct file *) 0x23750 <file_table+16>
+
+(gdb) p *current->filp[3]
+$29 = {f_mode = 32896, f_flags = 0, f_count = 1, 
+  f_inode = 0x21710 <inode_table+336>, f_pos = 0}
+
+//查看3号描述符的i节点
+(gdb) p *current->filp[3]->f_inode
+$30 = {i_mode = 32896, i_uid = 0, i_size = 96, 
+  i_mtime = 1513893402, i_gid = 0 '\000', 
+  i_nlinks = 2 '\002', i_zone = {251, 0, 0, 0, 0, 0, 0, 0, 
+    0}, i_wait = 0x0 <startup_32>, i_atime = 1539968966, 
+  i_ctime = 0, i_dev = 768, i_num = 69, i_count = 1, 
+  i_lock = 0 '\000', i_dirt = 0 '\000', i_pipe = 0 '\000', 
+  i_mount = 0 '\000', i_seek = 0 '\000', 
+  i_update = 0 '\000'}
+//可见与前面获取的i节点相同
+
+(gdb) 
+
+//总结一下，在打开文件/usr/root/hello.c的过程中，依次获取了以下内容：
+'/'的第一个数据块
+'/usr'的i节点和第一个数据块
+'/usr/root'的i节点和第一个数据块
+'/usr/root/hello.c'的i节点
+根目录的i节点号固定为1，会在系统初始化时获取。

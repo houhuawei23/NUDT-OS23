@@ -1,0 +1,256 @@
+本实验用到的命令汇总：
+--------------------------------------------------------------
+gdb tools/system -x ../../0.gdb
+(gdb) b schedule
+(gdb) c
+(gdb) p task
+(gdb) display current->pid
+(gdb) p task[0]->state
+(gdb) p task[0]->counter
+(gdb) p task[1]->state
+(gdb) p task[1]->counter
+(gdb) b 136
+(gdb) c
+(gdb) p c
+(gdb) p next
+(gdb) n
+(gdb) x/12i $eip
+(gdb) b *0x6f99
+(gdb) c
+(gdb) p/x $cs
+(gdb) p/x $eip
+(gdb) p/x task[0]->tss.cs
+(gdb) p/x task[0]->tss.eip
+(gdb) si
+(gdb) p/x task[0]->tss.cs
+(gdb) p/x task[0]->tss.eip
+(gdb) p/x $cs
+(gdb) p/x $eip
+(gdb) p/x task[1]->tss.cs
+(gdb) p/x task[1]->tss.eip
+(gdb) kill
+(gdb) quit
+
+
+文件~/os/linux-0.11-lab/0.gdb的内容：
+--------------------------------------------------------------
+target remote localhost:1234
+b main
+c
+
+
+gdb侧的调试过程：
+--------------------------------------------------------------
+nudt@uvm:~/os/linux-0.11-lab/1/linux$ gdb tools/system -x ../../0.gdb
+GNU gdb (GDB) 7.6.1-ubuntu
+Copyright (C) 2013 Free Software Foundation, Inc.
+License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>
+This is free software: you are free to change and redistribute it.
+There is NO WARRANTY, to the extent permitted by law.  Type "show copying"
+and "show warranty" for details.
+This GDB was configured as "i686-linux-gnu".
+For bug reporting instructions, please see:
+<http://www.gnu.org/software/gdb/bugs/>...
+Reading symbols from /mnt/hgfs/u/os-exp/19spring-os/linux-0.11-lab/1/linux/tools/system...done.
+0x0000fff0 in find_entry (dir=0x0 <startup_32>, name=0x0 <startup_32>, namelen=0, 
+    res_dir=0x0 <startup_32>) at namei.c:112
+112		if (namelen==2 && get_fs_byte(name)=='.' && get_fs_byte(name+1)=='.') {
+Breakpoint 1 at 0x680b: file init/main.c, line 112.
+
+Breakpoint 1, main () at init/main.c:112
+112	{			/* The startup routine assumes (well, ...) this */
+
+//跟踪到第一次调度
+(gdb) b schedule
+Breakpoint 2 at 0x6df9: file sched.c, line 106.
+
+(gdb) c
+Continuing.
+
+Breakpoint 2, schedule () at sched.c:106
+106	{
+
+//查看所有进程
+(gdb) p task
+$1 = {0x1bec0 <init_task>, 0xfff000, 0x0 <startup_32> <repeats 62 times>}
+
+(gdb) display current->pid
+1: current->pid = 0
+
+(gdb) p task[0]->state
+$2 = 1
+
+(gdb) p task[0]->counter
+$3 = 13
+
+(gdb) p task[1]->state
+$4 = 0
+
+(gdb) p task[1]->counter
+$5 = 15
+//可见0号进程已变为睡眠态，1号进程为就绪态
+
+//跟踪到进程选择结束
+(gdb) b 136
+Breakpoint 3 at 0x6f1d: file sched.c, line 136.
+
+(gdb) c
+Continuing.
+
+Breakpoint 3, schedule () at sched.c:136
+136			if (c) break;
+1: current->pid = 0
+
+(gdb) p c
+$6 = 15
+
+(gdb) p next
+$7 = 1
+//可见选出了1号进程(task[1])
+
+//跟踪到进程切换指令（ljmp）
+(gdb) n
+142		switch_to(next);
+1: current->pid = 0
+
+(gdb) x/12i $eip
+=> 0x6f6f <schedule+374>:	mov    0x18(%esp),%eax
+   0x6f73 <schedule+378>:	shl    $0x4,%eax
+   0x6f76 <schedule+381>:	lea    0x20(%eax),%edx
+   0x6f79 <schedule+384>:	mov    0x18(%esp),%eax
+   0x6f7d <schedule+388>:	mov    0x1cee0(,%eax,4),%eax
+   0x6f84 <schedule+395>:	mov    %eax,%ecx
+   0x6f86 <schedule+397>:	cmp    %ecx,0x1cec0
+   0x6f8c <schedule+403>:	je     0x6fa7 <schedule+430>
+   0x6f8e <schedule+405>:	mov    %dx,0xc(%esp)
+   0x6f93 <schedule+410>:	xchg   %ecx,0x1cec0
+   0x6f99 <schedule+416>:	ljmp   *0x8(%esp)
+   0x6f9d <schedule+420>:	cmp    %ecx,0x1fc68
+
+(gdb) b *0x6f99
+Breakpoint 4 at 0x6f99: file sched.c, line 142.
+
+(gdb) c
+Continuing.
+
+Breakpoint 4, 0x00006f99 in schedule () at sched.c:142
+142		switch_to(next);
+1: current->pid = 1
+//此时其实还在0号进程，只是刚改了current的值（current的地址为0x1cec0）。
+
+//查看当前的cpu现场（部分寄存器）
+(gdb) p/x $cs
+$8 = 0x8
+
+(gdb) p/x $eip
+$9 = 0x6f99
+
+//查看0号进程的进程控制块中的现场（tss）
+(gdb) p/x task[0]->tss.cs
+$10 = 0x17
+
+(gdb) p/x task[0]->tss.eip
+$11 = 0x0
+
+//切换
+(gdb) si
+0x00006932 in fork () at init/main.c:24
+24	__always_inline _syscall0(int,fork)
+1: current->pid = 1
+
+(gdb) p/x task[0]->tss.cs
+$12 = 0x8
+
+(gdb) p/x task[0]->tss.eip
+$13 = 0x6f9d	//是ljmp的下一条指令的地址
+//可见原cpu现场已被保存到0号进程的tss
+
+(gdb) p/x $cs
+$14 = 0xf
+
+(gdb) p/x $eip
+$15 = 0x6932
+//可见当前的cpu现场已被恢复，来自1号进程的tss，可验证如下：
+
+(gdb) p/x task[1]->tss.cs
+$16 = 0xf
+
+(gdb) p/x task[1]->tss.eip
+$17 = 0x6932
+
+//下面验证ljmp指令（地址为0x6f99）执行前后tr寄存器的变化：
+
+(gdb) kill
+Kill the program being debugged? (y or n) y
+
+(gdb) quit
+nudt@uvm:~/os/linux-0.11-lab/1/linux$ 
+
+//使用bochsdbg调试模式
+nudt@uvm:~/os/linux-0.11-lab$ ./rundbg
+========================================================================
+                       Bochs x86 Emulator 2.6.9
+               Built from SVN snapshot on April 9, 2017
+                  Compiled on May 11 2017 at 21:37:36
+========================================================================
+00000000000i[      ] BXSHARE not set. using compile time default '/usr/local/share/bochs'
+00000000000i[      ] reading configuration from conf/0.11.bxrc
+00000000000i[      ] installing x module as the Bochs GUI
+00000000000i[      ] using log file bochsout.txt
+Next at t=0
+(0) [0x0000fffffff0] f000:fff0 (unk. ctxt): jmpf 0xf000:e05b          ; ea5be000f0
+
+//跟踪到ljmp指令
+<bochs:1> b 0x6f99
+
+<bochs:2> c
+(0) Breakpoint 1, 0x00006f99 in ?? ()
+Next at t=116315455
+(0) [0x000000006f99] 0008:00006f99 (unk. ctxt): jmpf ss:[esp+8]           ; ff6c2408
+
+//查看切换前的tr寄存器：
+<bochs:3> sreg
+es:0x0010, dh=0x00c09300, dl=0x00000fff, valid=1
+	Data segment, base=0x00000000, limit=0x00ffffff, Read/Write, Accessed
+cs:0x0008, dh=0x00c09b00, dl=0x00000fff, valid=1
+	Code segment, base=0x00000000, limit=0x00ffffff, Execute/Read, Non-Conforming, Accessed, 32-bit
+ss:0x0010, dh=0x00c09300, dl=0x00000fff, valid=7
+	Data segment, base=0x00000000, limit=0x00ffffff, Read/Write, Accessed
+ds:0x0010, dh=0x00c09300, dl=0x00000fff, valid=7
+	Data segment, base=0x00000000, limit=0x00ffffff, Read/Write, Accessed
+fs:0x0017, dh=0x00c0f300, dl=0x0000009f, valid=1
+	Data segment, base=0x00000000, limit=0x0009ffff, Read/Write, Accessed
+gs:0x0017, dh=0x00c0f300, dl=0x0000009f, valid=1
+	Data segment, base=0x00000000, limit=0x0009ffff, Read/Write, Accessed
+ldtr:0x0028, dh=0x00008201, dl=0xc1900068, valid=1
+tr:0x0020, dh=0x00008b01, dl=0xc1a80068, valid=1
+gdtr:base=0x00005cc0, limit=0x7ff
+idtr:base=0x000054c0, limit=0x7ff
+//可见tr指向gdt的4号描述符（0x0020>>3）。
+
+//单步执行ljmp指令
+<bochs:4> next
+Next at t=116315456
+(0) [0x000000006932] 000f:00006932 (unk. ctxt): mov dword ptr ss:[esp+44], eax ; 8944242c
+
+//再次查看tr
+<bochs:5> sreg
+es:0x0017, dh=0x04c0f300, dl=0x0000009f, valid=1
+	Data segment, base=0x04000000, limit=0x0009ffff, Read/Write, Accessed
+cs:0x000f, dh=0x04c0fb00, dl=0x0000009f, valid=1
+	Code segment, base=0x04000000, limit=0x0009ffff, Execute/Read, Non-Conforming, Accessed, 32-bit
+ss:0x0017, dh=0x04c0f300, dl=0x0000009f, valid=1
+	Data segment, base=0x04000000, limit=0x0009ffff, Read/Write, Accessed
+ds:0x0017, dh=0x04c0f300, dl=0x0000009f, valid=1
+	Data segment, base=0x04000000, limit=0x0009ffff, Read/Write, Accessed
+fs:0x0017, dh=0x04c0f300, dl=0x0000009f, valid=1
+	Data segment, base=0x04000000, limit=0x0009ffff, Read/Write, Accessed
+gs:0x0017, dh=0x04c0f300, dl=0x0000009f, valid=1
+	Data segment, base=0x04000000, limit=0x0009ffff, Read/Write, Accessed
+ldtr:0x0038, dh=0x000082ff, dl=0xf2d00068, valid=1
+tr:0x0030, dh=0x00008bff, dl=0xf2e80068, valid=1
+gdtr:base=0x00005cc0, limit=0x7ff
+idtr:base=0x000054c0, limit=0x7ff
+//可见tr已指向gdt的6号描述符（0x0030>>3）。
+
+<bochs:6> quit

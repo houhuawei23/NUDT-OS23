@@ -1,0 +1,117 @@
+本实验用到的命令汇总：
+--------------------------------------------------------------
+(gdb) target remote localhost:1234
+(gdb) b main
+(gdb) c
+(gdb) b 145
+(gdb) c
+(gdb) n
+(gdb) x/6i $eip
+(gdb) si
+(gdb) x/6i $eip
+(gdb) si
+(gdb) x/16i $eip
+(gdb) b *0x77a8
+(gdb) c
+(gdb) si
+(gdb) 
+
+gdb侧的调试过程：
+--------------------------------------------------------------
+//开始gdb调试
+nudt@uvm:~/os/linux-0.11-lab/1/linux$ gdb tools/system 
+GNU gdb (GDB) 7.6.1-ubuntu
+Copyright (C) 2013 Free Software Foundation, Inc.
+License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>
+This is free software: you are free to change and redistribute it.
+There is NO WARRANTY, to the extent permitted by law.  Type "show copying"
+and "show warranty" for details.
+This GDB was configured as "i686-linux-gnu".
+For bug reporting instructions, please see: <http://www.gnu.org/software/gdb/bugs/>...
+Reading symbols from /mnt/hgfs/u/os-exp/19spring-os/linux-0.11-lab/1/linux/tools/system...done.
+
+(gdb) target remote localhost:1234
+Remote debugging using localhost:1234
+0x0000fff0 in find_entry (dir=0x0 <startup_32>, 
+    name=0x0 <startup_32>, namelen=0, res_dir=0x0 <startup_32>)
+    at namei.c:112
+112		if (namelen==2 && get_fs_byte(name)=='.' && get_fs_byte(name+1)=='.') {
+
+//跟踪到fork函数调用之前
+(gdb) b main
+Breakpoint 1 at 0x680b: file init/main.c, line 112.
+
+(gdb) c
+Continuing.
+
+Breakpoint 1, main () at init/main.c:112
+112	{			/* The startup routine assumes (well, ...) this */
+
+(gdb) b 145
+Breakpoint 2 at 0x6910: file init/main.c, line 145.
+
+(gdb) c
+Continuing.
+
+Breakpoint 2, main () at init/main.c:145
+145		move_to_user_mode();
+
+(gdb) n
+147		if (!fork()) {		/* we count on this going ok */
+
+//观察fork函数调用对应的汇编指令
+(gdb) x/6i $eip
+=> 0x692b <main+288>:	mov    $0x2,%eax
+   0x6930 <main+293>:	int    $0x80
+   0x6932 <main+295>:	mov    %eax,0x2c(%esp)
+   0x6936 <main+299>:	cmpl   $0x0,0x2c(%esp)
+   0x693b <main+304>:	js     0x6943 <main+312>
+   0x693d <main+306>:	mov    0x2c(%esp),%eax
+
+(gdb) si
+0x00006930 in fork () at init/main.c:24
+24	__always_inline _syscall0(int,fork)
+
+(gdb) x/6i $eip
+=> 0x6930 <main+293>:	int    $0x80
+   0x6932 <main+295>:	mov    %eax,0x2c(%esp)
+   0x6936 <main+299>:	cmpl   $0x0,0x2c(%esp)
+   0x693b <main+304>:	js     0x6943 <main+312>
+   0x693d <main+306>:	mov    0x2c(%esp),%eax
+   0x6941 <main+310>:	jmp    0x6953 <main+328>
+
+//单步执行自陷指令，切换到核心态执行系统调用总控函数
+(gdb) si
+0x0000778c in system_call ()
+
+(gdb) x/16i $eip
+=> 0x778c <system_call>:	cmp    $0x55,%eax
+   0x778f <system_call+3>:	ja     0x7778 <bad_sys_call>
+   0x7791 <system_call+5>:	push   %ds
+   0x7792 <system_call+6>:	push   %es
+   0x7793 <system_call+7>:	push   %fs
+   0x7795 <system_call+9>:	push   %edx
+   0x7796 <system_call+10>:	push   %ecx
+   0x7797 <system_call+11>:	push   %ebx
+   0x7798 <system_call+12>:	mov    $0x10,%edx
+   0x779d <system_call+17>:	mov    %edx,%ds
+   0x779f <system_call+19>:	mov    %edx,%es
+   0x77a1 <system_call+21>:	mov    $0x17,%edx
+   0x77a6 <system_call+26>:	mov    %edx,%fs
+   0x77a8 <system_call+28>:	call   *0x1bd60(,%eax,4)
+   0x77af <system_call+35>:	push   %eax
+   0x77b0 <system_call+36>:	mov    0x1cec0,%eax
+
+//在地址0x77a8处设置断点，观察对系统调用实现函数的调用
+(gdb) b *0x77a8
+Breakpoint 3 at 0x77a8
+
+(gdb) c
+Continuing.
+
+Breakpoint 3, 0x000077a8 in system_call ()
+
+(gdb) si
+0x000078ac in sys_fork ()
+
+(gdb) 

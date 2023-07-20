@@ -1,0 +1,125 @@
+演示5.2：#1进程创建前后的页表
+分析对象：版本1内核
+
+本实验用到的命令汇总：
+--------------------------------------------------------------
+./rundbg
+<bochs:1> b 0x6930
+<bochs:2> c
+<bochs:3> creg
+<bochs:4> x/20wx 0
+<bochs:5> x/20wx 0x1000
+<bochs:6> n
+<bochs:7> x/20wx 0x0
+<bochs:8> x/20wx 0xffe000
+<bochs:9> x/20wx 0x4000000
+<bochs:10> x/20wx 0x8000000
+<bochs:11> page 0x4000000
+<bochs:12> info tab
+
+
+调试分析过程：
+--------------------------------------------------------------
+//启动bochsdbg调试器
+nudt@uvm:~/os/linux-0.11-lab$ ./rundbg
+========================================================================
+                       Bochs x86 Emulator 2.6.9
+               Built from SVN snapshot on April 9, 2017
+                  Compiled on May 11 2017 at 21:37:36
+========================================================================
+00000000000i[      ] BXSHARE not set. using compile time default '/usr/local/share/bochs'
+00000000000i[      ] reading configuration from conf/0.11.bxrc
+00000000000i[      ] installing x module as the Bochs GUI
+00000000000i[      ] using log file bochsout.txt
+Next at t=0
+(0) [0x0000fffffff0] f000:fff0 (unk. ctxt): jmpf 0xf000:e05b          ; ea5be000f0
+
+//跟踪到fork系统调用的自陷指令
+<bochs:1> b 0x6930
+
+<bochs:2> c
+(0) Breakpoint 1, 0x00006930 in ?? ()
+Next at t=116110791
+(0) [0x000000006930] 000f:00006930 (unk. ctxt): int 0x80                  ; cd80
+
+//查看控制寄存器
+<bochs:3> creg
+CR0=0x80000013: PG cd nw ac wp ne ET ts em MP PE  //已启用分页(PG)，已启用分段（PE）
+CR2=page fault laddr=0x00000000
+CR3=0x000000000000	//页目录的起始地址
+    PCD=page-level cache disable=0
+    PWT=page-level write-through=0
+CR4=0x00000000: pke smap smep osxsave pcid fsgsbase smx vmx osxmmexcpt umip osfxsr pce pge mce pae pse de tsd pvi vme
+EFER=0x00000000: ffxsr nxe lma lme sce
+
+//查看页目录（一级页表）
+<bochs:4> x/20wx 0
+[bochs]:
+0x00000000 <bogus+       0>:	0x00001027	0x00002007	0x00003007	0x00004007
+0x00000010 <bogus+      16>:	0x00000000	0x00000000	0x00000000	0x00000000
+0x00000020 <bogus+      32>:	0x00000000	0x00000000	0x00000000	0x00000000
+0x00000030 <bogus+      48>:	0x00000000	0x00000000	0x00000000	0x00000000
+0x00000040 <bogus+      64>:	0x00000000	0x00000000	0x00000000	0x00000000
+
+//查看第1个二级页表
+<bochs:5> x/20wx 0x1000
+[bochs]:
+0x00001000 <bogus+       0>:	0x00000007	0x00001007	0x00002007	0x00003007
+0x00001010 <bogus+      16>:	0x00004007	0x00005067	0x00006067	0x00007027
+0x00001020 <bogus+      32>:	0x00008027	0x00009007	0x0000a027	0x0000b027
+0x00001030 <bogus+      48>:	0x0000c007	0x0000d027	0x0000e007	0x0000f007
+0x00001040 <bogus+      64>:	0x00010007	0x00011007	0x00012027	0x00013027
+//线性地址空间[0,16M)采用对等映射，即映射到相同的物理地址。
+
+//执行系统调用
+<bochs:6> n
+Next at t=116117493
+(0) [0x000000006932] 000f:00006932 (unk. ctxt): mov dword ptr ss:[esp+44], eax ; 8944242c
+
+//再次查看页目录
+<bochs:7> x/20wx 0x0
+[bochs]:
+0x00000000 <bogus+       0>:	0x00001027	0x00002007	0x00003007	0x00004027
+0x00000010 <bogus+      16>:	0x00000000	0x00000000	0x00000000	0x00000000
+0x00000020 <bogus+      32>:	0x00000000	0x00000000	0x00000000	0x00000000
+0x00000030 <bogus+      48>:	0x00000000	0x00000000	0x00000000	0x00000000
+0x00000040 <bogus+      64>:	0x00ffe007	0x00000000	0x00000000	0x00000000
+                                ^多了一个页目录项，对应线性地址空间[64M, 68M)
+//查看新增的二级页表
+<bochs:8> x/20wx 0xffe000
+[bochs]:
+0x00ffe000 <bogus+       0>:	0x00000065	0x00001025	0x00002005	0x00003005
+0x00ffe010 <bogus+      16>:	0x00004005	0x00005065	0x00006065	0x00007025
+0x00ffe020 <bogus+      32>:	0x00008025	0x00009005	0x0000a025	0x0000b025
+0x00ffe030 <bogus+      48>:	0x0000c005	0x0000d025	0x0000e005	0x0000f005
+0x00ffe040 <bogus+      64>:	0x00010005	0x00011005	0x00012025	0x00013025
+//可见它与0x1000处的二级页表的映射方式相同，只是不能写。也就是说，线性地址空间[64M,+640K)和[0,+640K)都被映射到了物理地址空间[0,640K)。
+
+//直接查看64M开始的线性地址空间
+<bochs:9> x/20wx 0x4000000
+[bochs]:
+0x04000000 <bogus+       0>:	0x00001027	0x00002007	0x00003007	0x00004027
+0x04000010 <bogus+      16>:	0x00000000	0x00000000	0x00000000	0x00000000
+0x04000020 <bogus+      32>:	0x00000000	0x00000000	0x00000000	0x00000000
+0x04000030 <bogus+      48>:	0x00000000	0x00000000	0x00000000	0x00000000
+0x04000040 <bogus+      64>:	0x00ffe007	0x00000000	0x00000000	0x00000000
+//可见它与前面看到的0x00000000处的内容相同，因为这两个线性地址都对应到物理地址0x00000000。
+
+//查看线性地址128M处的内容
+<bochs:10> x/20wx 0x8000000
+[bochs]:
+0x08000000 <bogus+       0>:bx_dbg_read_linear: physical address not available for linear 0x08000000
+//可见无法访问，因为该地址对应的页目录项还是空，没有进行映射。
+
+//可以直接查看一个线性地址对应的物理地址
+<bochs:11> page 0x4000000
+ PDE: 0x0000000000ffe007    ps         a pcd pwt U W P
+ PTE: 0x0000000000000065       g pat D A pcd pwt U R P
+linear page 0x04000000 maps to physical page 0x000000000000
+
+//可直接查看页表映射的总体情况，查看所有线性地址与物理地址的映射关系：
+<bochs:12> info tab
+cr3: 0x000000000000
+0x00000000-0x00ffffff -> 0x000000000000-0x000000ffffff  //[0,16M) -> [0, 16M)
+0x04000000-0x0409ffff -> 0x000000000000-0x00000009ffff  //[64M,+640K) -> [0, +640K)
+^线性地址区间              ^物理地址区间

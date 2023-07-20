@@ -1,0 +1,334 @@
+//演示6-1：读块设备
+//分析读取文件hello.c的过程
+
+本实验用到的命令汇总：
+--------------------------------------------------------------
+gdb tools/system -x ../../0.gdb
+(gdb) handle SIGSEGV nostop noprint ignore
+(gdb) list 192
+(gdb) b 192
+(gdb) c
+(gdb) display current->pid
+(gdb) b bread
+(gdb) c
+(gdb) b add_request
+(gdb) c
+(gdb) p *dev
+(gdb) p *req
+(gdb) p blk_dev
+(gdb) b hd_out
+(gdb) c
+(gdb) bt
+(gdb) b sleep_on
+(gdb) b read_intr
+(gdb) c
+(gdb) c
+(gdb) p task[1]->state
+(gdb) n
+(gdb) n
+(gdb) p blk_dev[3].current_request
+(gdb) p *blk_dev[3].current_request
+(gdb) x/64c 0x3fd000
+(gdb) n
+(gdb) x/64c 0x3fd000
+(gdb) x/s 0x3fd000
+(gdb) c
+(gdb) b wake_up
+(gdb) c
+(gdb) bt
+(gdb) p *p
+(gdb) n
+(gdb) n
+(gdb) p task[1]->state
+(gdb) b ret_from_sys_call 
+(gdb) c
+(gdb) c
+(gdb) c
+(gdb) 
+(gdb) kill
+(gdb) quit
+
+
+文件~/os/linux-0.11-lab/0.gdb的内容：
+--------------------------------------------------------------
+target remote localhost:1234
+b main
+c
+
+
+gdb侧的调试过程：
+--------------------------------------------------------------
+nudt@uvm:~/os/linux-0.11-lab/2/linux$ gdb tools/system -x ../../0.gdb
+GNU gdb (GDB) 7.6.1-ubuntu
+Copyright (C) 2013 Free Software Foundation, Inc.
+License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>
+This is free software: you are free to change and redistribute it.
+There is NO WARRANTY, to the extent permitted by law.  Type "show copying"
+and "show warranty" for details.
+This GDB was configured as "i686-linux-gnu".
+For bug reporting instructions, please see:
+<http://www.gnu.org/software/gdb/bugs/>...
+Reading symbols from /mnt/hgfs/u/os-exp/19spring-os/linux-0.11-lab/2/linux/tools/system...done.
+0x0000fff0 in add_entry (dir=0x0 <startup_32>, name=0x0 <startup_32>, namelen=0, 
+    res_dir=0x0 <startup_32>) at namei.c:182
+182        if (!(block = dir->i_zone[0]))
+Breakpoint 1 at 0x6799: file init/main.c, line 105.
+
+Breakpoint 1, main () at init/main.c:105
+105    {            /* The startup routine assumes (well, ...) this */
+
+(gdb) handle SIGSEGV nostop noprint ignore
+Signal        Stop    Print    Pass to program    Description
+SIGSEGV       No    No    No        Segmentation fault
+
+(gdb) list 192
+187        /* open and read the file */
+188        if ((fd=open(FILE_FROM,O_RDONLY,0)) < 0) {
+189            printf("Open file error.\n\r");
+190            _exit(1);
+191        }
+192        if ((num = read(fd, msg, MSG_LEN))<0) {
+193            printf("Read file error.\n\r");
+194            _exit(1);
+195        }
+196        close(fd);
+//可见是在第192行开始读取hello.c
+
+(gdb) b 192
+Breakpoint 2 at 0x6a28: file init/main.c, line 192.
+
+(gdb) c
+Continuing.
+//此时需要切换到bochs虚拟机画面并按回车
+
+Breakpoint 2, init () at init/main.c:192
+192        if ((num = read(fd, msg, MSG_LEN))<0) {
+
+(gdb) display current->pid
+1: current->pid = 1
+
+//跟踪到bread
+(gdb) b bread
+Breakpoint 3 at 0xcef8: file buffer.c, line 271.
+
+(gdb) c
+Continuing.
+
+Breakpoint 3, bread (dev=768, block=251) at buffer.c:271
+271    {
+1: current->pid = 1
+
+//跟踪到add_request
+(gdb) b add_request
+Breakpoint 4 at 0x12528: file ll_rw_blk.c, line 65.
+
+(gdb) c
+Continuing.
+
+Breakpoint 4, add_request (dev=0x21778 <blk_dev+24>, req=0x239fc <request+1116>)
+    at ll_rw_blk.c:65
+65    {
+1: current->pid = 1
+
+(gdb) p *dev
+$1 = {request_fn = 0x13de1 <do_hd_request>, current_request = 0x0 <startup_32>}
+//可见此时请求队列为空
+
+(gdb) p *req
+$2 = {dev = 768, cmd = 0, errors = 0, sector = 502, nr_sectors = 2, buffer = 0x3fd000 "", 
+  waiting = 0x0 <startup_32>, bh = 0x23bbc, next = 0x0 <startup_32>}
+//新请求的数据将存放到内存0x3fd000处
+
+(gdb) p blk_dev
+$3 = {{request_fn = 0x0 <startup_32>, current_request = 0x0 <startup_32>}, {
+    request_fn = 0x0 <startup_32>, current_request = 0x0 <startup_32>}, {
+    request_fn = 0x13277 <do_fd_request>, current_request = 0x0 <startup_32>}, {
+    request_fn = 0x13de1 <do_hd_request>, current_request = 0x0 <startup_32>}, {
+    request_fn = 0x0 <startup_32>, current_request = 0x0 <startup_32>}, {
+    request_fn = 0x0 <startup_32>, current_request = 0x0 <startup_32>}, {
+    request_fn = 0x0 <startup_32>, current_request = 0x0 <startup_32>}}
+//这是所有块设备的信息，硬盘是blk_dev[3]
+
+//跟踪到hd_out
+(gdb) b hd_out
+Breakpoint 5 at 0x139e8: file hd.c, line 185.
+
+(gdb) c
+Continuing.
+
+Breakpoint 5, hd_out (drive=0, nsect=2, sect=17, head=1, cyl=13, cmd=32, 
+    intr_addr=0x13ca1 <read_intr>) at hd.c:185
+185    {
+1: current->pid = 1
+
+(gdb) bt
+#0  hd_out (drive=0, nsect=2, sect=17, head=1, cyl=13, cmd=32, intr_addr=0x13ca1 <read_intr>)
+    at hd.c:185
+#1  0x000140ce in do_hd_request () at hd.c:340
+#2  0x00012573 in add_request (dev=0x21778 <blk_dev+24>, req=0x239fc <request+1116>)
+    at ll_rw_blk.c:75
+#3  0x00012885 in make_request (major=3, rw=0, bh=0x23bbc) at ll_rw_blk.c:142
+#4  0x000128de in ll_rw_block (rw=0, bh=0x23bbc) at ll_rw_blk.c:154
+#5  0x0000cf4b in bread (dev=768, block=251) at buffer.c:278
+#6  0x0000e276 in file_read (inode=0x21170 <inode_table+336>, filp=0x231b0 <file_table+16>, 
+    buf=0x228ab <user_stack+3915> "", count=74) at file_dev.c:26
+#7  0x0000b9aa in sys_read (fd=3, buf=0x228ab <user_stack+3915> "", count=74)
+    at read_write.c:77
+#8  0x0000763b in system_call ()
+#9  0x00000003 in startup_32 ()
+//从中可见从bread到hd_out的函数调用栈
+
+(gdb) b sleep_on
+Breakpoint 6 at 0x6e69: file sched.c, line 152.
+
+(gdb) b read_intr
+Breakpoint 7 at 0x13ca1: file hd.c, line 253.
+
+(gdb) c
+Continuing.
+
+Breakpoint 6, sleep_on (p=0x23bcc) at sched.c:152
+152	{
+1: current->pid = 1
+
+(gdb) c
+Continuing.
+
+Breakpoint 7, read_intr () at hd.c:253
+253    {
+1: current->pid = 0
+//硬盘中断发生，当前是0号进程！
+
+(gdb) p task[1]->state
+$4 = 2
+//1号进程已经进入睡眠态
+
+(gdb) n
+254        if (win_result()) {
+1: current->pid = 0
+
+(gdb) n
+259        port_read(HD_DATA,CURRENT->buffer,256);
+1: current->pid = 0
+//这一条语句将从硬盘控制器拷贝数据到内存
+
+//查看该buffer的当前状态
+(gdb) p blk_dev[3].current_request
+$5 = (struct request *) 0x239fc <request+1116>
+
+(gdb) p *blk_dev[3].current_request
+$6 = {dev = 768, cmd = 0, errors = 0, sector = 502, nr_sectors = 2, buffer = 0x3fd000 "", 
+  waiting = 0x0 <startup_32>, bh = 0x23bbc, next = 0x0 <startup_32>}
+
+(gdb) x/64c 0x3fd000
+0x3fd000:    0 '\000'    0 '\000'    0 '\000'    0 '\000'    0 '\000'    0 '\000'    0 '\000'    0 '\000'
+0x3fd008:    0 '\000'    0 '\000'    0 '\000'    0 '\000'    0 '\000'    0 '\000'    0 '\000'    0 '\000'
+0x3fd010:    0 '\000'    0 '\000'    0 '\000'    0 '\000'    0 '\000'    0 '\000'    0 '\000'    0 '\000'
+0x3fd018:    0 '\000'    0 '\000'    0 '\000'    0 '\000'    0 '\000'    0 '\000'    0 '\000'    0 '\000'
+0x3fd020:    0 '\000'    0 '\000'    0 '\000'    0 '\000'    0 '\000'    0 '\000'    0 '\000'    0 '\000'
+0x3fd028:    0 '\000'    0 '\000'    0 '\000'    0 '\000'    0 '\000'    0 '\000'    0 '\000'    0 '\000'
+0x3fd030:    0 '\000'    0 '\000'    0 '\000'    0 '\000'    0 '\000'    0 '\000'    0 '\000'    0 '\000'
+0x3fd038:    0 '\000'    0 '\000'    0 '\000'    0 '\000'    0 '\000'    0 '\000'    0 '\000'    0 '\000'
+//可见全是0
+
+//单步执行，读取数据
+(gdb) n
+260        CURRENT->errors = 0;
+1: current->pid = 0
+
+(gdb) x/64c 0x3fd000
+0x3fd000:    35 '#'    105 'i'    110 'n'    99 'c'    108 'l'    117 'u'    100 'd'    101 'e'
+0x3fd008:    32 ' '    60 '<'    115 's'    116 't'    100 'd'    105 'i'    111 'o'    46 '.'
+0x3fd010:    104 'h'    62 '>'    10 '\n'    10 '\n'    105 'i'    110 'n'    116 't'    32 ' '
+0x3fd018:    109 'm'    97 'a'    105 'i'    110 'n'    40 '('    41 ')'    10 '\n'    123 '{'
+0x3fd020:    10 '\n'    9 '\t'    112 'p'    114 'r'    105 'i'    110 'n'    116 't'    102 'f'
+0x3fd028:    40 '('    34 '"'    72 'H'    101 'e'    108 'l'    108 'l'    111 'o'    44 ','
+0x3fd030:    32 ' '    119 'w'    111 'o'    114 'r'    108 'l'    100 'd'    33 '!'    92 '\\'
+0x3fd038:    110 'n'    34 '"'    41 ')'    59 ';'    10 '\n'    9 '\t'    114 'r'    101 'e'
+
+(gdb) x/s 0x3fd000
+0x3fd000:    "#include <stdio.h>\n\nint main()\n{\n\tprintf(\"Hello, world!\\n\");\n\treturn 0;\n}\n"
+//可见数据已读入内存
+
+(gdb) c
+Continuing.
+
+Breakpoint 7, read_intr () at hd.c:253
+253    {
+1: current->pid = 0
+//又一次发生硬盘中断。一个1K数据的读请求会引发2次硬盘中断，每次传输512B。
+
+(gdb) b wake_up
+Breakpoint 8 at 0x6f5b: file sched.c, line 190.
+
+(gdb) c
+Continuing.
+
+Breakpoint 8, wake_up (p=0x23bcc) at sched.c:190
+190        if (p && *p) {
+1: current->pid = 0
+
+(gdb) bt
+#0  wake_up (p=0x23bcc) at sched.c:190
+#1  0x000134fe in unlock_buffer (bh=0x23bbc) at blk.h:106
+#2  0x00013530 in end_request (uptodate=1) at blk.h:114
+#3  0x00013d2f in read_intr () at hd.c:267
+#4  0x00007784 in hd_interrupt ()
+#5  0x00000000 in ?? ()
+//可见依然在中断处理中
+
+(gdb) p *p
+$7 = (struct task_struct *) 0xfff000
+//试图唤醒1号进程
+
+(gdb) n
+191            (**p).state=0;
+1: current->pid = 0
+
+(gdb) n
+192            *p=NULL;
+1: current->pid = 0
+
+(gdb) p task[1]->state
+$8 = 0
+//可见1号进程已经被唤醒，当前仍处于0号进程。
+
+//跟踪到1号进程重新运行
+(gdb) b ret_from_sys_call 
+Breakpoint 9 at 0x764c
+
+(gdb) c
+Continuing.
+
+Breakpoint 8, wake_up (p=0x23a14 <request+1140>) at sched.c:190
+190        if (p && *p) {
+1: current->pid = 0
+
+(gdb) c
+Continuing.
+
+Breakpoint 8, wake_up (p=0x21740 <wait_for_request>) at sched.c:190
+190        if (p && *p) {
+1: current->pid = 0
+//上面两次唤醒动作没有影响1号进程，因为它已经被唤醒了
+
+(gdb) c
+Continuing.
+
+Breakpoint 8, wake_up (p=0x21728 <buffer_wait>) at sched.c:190
+190        if (p && *p) {
+1: current->pid = 1
+//已经切换到了1号进程！
+
+(gdb) 
+Continuing.
+
+Breakpoint 9, 0x0000764c in ret_from_sys_call ()
+1: current->pid = 1
+//1号进程从系统调用read返回
+
+(gdb) kill
+Kill the program being debugged? (y or n) y
+
+(gdb) quit
+nudt@uvm:~/os/linux-0.11-lab/2/linux$ 

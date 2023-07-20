@@ -1,0 +1,128 @@
+本实验用到的命令汇总：
+--------------------------------------------------------------
+nudt@uvm:~/os/linux-0.11-lab/1/linux$ gdb tools/system -x ../../0.gdb
+(gdb) b sys_pause if current->pid == 1
+(gdb) b sched.c:120 if p->pid == 1
+(gdb) c
+(gdb) display current->state
+(gdb) n
+(gdb) c
+(gdb) c
+(gdb) n
+(gdb) c
+(gdb) c
+(gdb) c
+(gdb) kill
+(gdb) quit
+
+
+文件~/os/linux-0.11-lab/0.gdb的内容：
+--------------------------------------------------------------
+target remote localhost:1234
+handle SIGSEGV nostop noprint ignore
+b main
+display current->pid
+c
+
+
+gdb调试过程：
+--------------------------------------------------------------
+//启动gdb调试，跟踪到main
+nudt@uvm:~/os/linux-0.11-lab/1/linux$ gdb tools/system -x ../../0.gdb
+GNU gdb (GDB) 7.6.1-ubuntu
+Copyright (C) 2013 Free Software Foundation, Inc.
+License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>
+This is free software: you are free to change and redistribute it.
+There is NO WARRANTY, to the extent permitted by law.  Type "show copying"
+and "show warranty" for details.
+This GDB was configured as "i686-linux-gnu".
+For bug reporting instructions, please see:
+<http://www.gnu.org/software/gdb/bugs/>...
+Reading symbols from /mnt/hgfs/u/os-exp/20spring-os/linux-0.11-lab/1/linux/tools/system...done.
+0x0000fff0 in find_entry (dir=0x0 <startup_32>, name=0x0 <startup_32>, 
+    namelen=0, res_dir=0x0 <startup_32>) at namei.c:112
+112		if (namelen==2 && get_fs_byte(name)=='.' && get_fs_byte(name+1)=='.') {
+Breakpoint 1 at 0x680b: file init/main.c, line 112.
+
+Breakpoint 1, main () at init/main.c:112
+112	{			/* The startup routine assumes (well, ...) this */
+1: current->pid = 0
+
+//在可能更改1号进程状态的地方设置断点
+(gdb) b sys_pause if current->pid == 1
+Breakpoint 2 at 0x6fab: file sched.c, line 147.
+
+(gdb) b sched.c:120 if p->pid == 1
+Breakpoint 3 at 0x6e90: file sched.c, line 120.
+  此处会唤醒进程
+
+(gdb) c
+Continuing.
+
+Breakpoint 2, sys_pause () at sched.c:147
+147		current->state = TASK_INTERRUPTIBLE;
+1: current->pid = 1
+  1号进程执行pause系统调用
+
+(gdb) display current->state
+2: current->state = 0
+
+(gdb) n
+148		schedule();
+2: current->state = 1
+1: current->pid = 1
+  状态已变为可中断睡眠
+
+(gdb) c
+Continuing.
+
+Breakpoint 3, schedule () at sched.c:120
+120					(*p)->state=TASK_RUNNING;
+2: current->state = 1
+1: current->pid = 0
+  被唤醒
+
+(gdb) c
+Continuing.
+
+Breakpoint 2, sys_pause () at sched.c:147
+147		current->state = TASK_INTERRUPTIBLE;
+2: current->state = 0
+1: current->pid = 1
+  1号进程再次执行pause系统调用
+
+(gdb) n
+148		schedule();
+2: current->state = 1
+1: current->pid = 1
+  又变为了可中断睡眠态
+
+(gdb) c
+Continuing.
+
+Breakpoint 3, schedule () at sched.c:120
+120					(*p)->state=TASK_RUNNING;
+2: current->state = 1
+1: current->pid = 0
+  再次被唤醒
+
+(gdb) c
+Continuing.
+
+Breakpoint 2, sys_pause () at sched.c:147
+147		current->state = TASK_INTERRUPTIBLE;
+2: current->state = 0
+1: current->pid = 1
+
+(gdb) c
+Continuing.
+
+Breakpoint 3, schedule () at sched.c:120
+120					(*p)->state=TASK_RUNNING;
+2: current->state = 1
+1: current->pid = 0
+
+(gdb) kill
+Kill the program being debugged? (y or n) y
+
+(gdb) quit

@@ -1,0 +1,147 @@
+本实验用到的命令汇总：
+--------------------------------------------------------------
+(gdb) target remote localhost:1234
+(gdb) b main
+(gdb) c
+(gdb) b task0
+(gdb) c
+(gdb) disas
+(gdb) si
+(gdb) disas
+(gdb) info registers 
+(gdb) si
+(gdb) info registers 
+(gdb) x/5wx $esp
+(gdb) p idt
+(gdb) x/2wx idt+8*0x81
+(gdb) 
+
+gdb侧的调试过程：
+--------------------------------------------------------------
+nudt@uvm:~/os/linux-0.11-lab/1/linux$ gdb tools/system
+GNU gdb (GDB) 7.6.1-ubuntu
+Copyrig
+(gdb)ht (C) 2013 Free Software Foundation, Inc.
+License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>
+This is free software: you are free to change and redistribute it.
+There is NO WARRANTY, to the extent permitted by law.  Type "show copying"
+and "show warranty" for details.
+This GDB was configured as "i686-linux-gnu".
+For bug reporting instructions, please see:
+<http://www.gnu.org/software/gdb/bugs/>...
+Reading symbols from /mnt/hgfs/u/os-exp/19spring-os/linux-0.11-lab/1/linux/tools/system...done.
+
+(gdb)target remote localhost:1234
+Remote debugging using localhost:1234
+0x0000fff0 in find_entry (dir=0x0 <startup_32>, 
+    name=0x0 <startup_32>, namelen=0, res_dir=0x0 <startup_32>)
+    at namei.c:112
+112		if (namelen==2 && get_fs_byte(name)=='.' && get_fs_byte(name+1)=='.') {
+
+(gdb)b main
+Breakpoint 1 at 0x680b: file init/main.c, line 112.
+
+(gdb)c
+Continuing.
+
+Breakpoint 1, main () at init/main.c:112
+112	{			/* The startup routine assumes (well, ...) this */
+
+(gdb)b task0
+Breakpoint 2 at 0x798b
+
+(gdb)c
+Continuing.
+
+Breakpoint 2, 0x0000798b in task0 ()
+
+(gdb)disas
+Dump of assembler code for function task0:
+=> 0x0000798b <+0>:	mov    $0x30,%al
+   0x0000798d <+2>:	int    $0x81
+   0x0000798f <+4>:	mov    $0xffff,%ecx
+   0x00007994 <+9>:	loop   0x7994 <task0+9>
+   0x00007996 <+11>:	mov    $0x20,%al
+   0x00007998 <+13>:	int    $0x81
+   0x0000799a <+15>:	mov    $0xffff,%ecx
+   0x0000799f <+20>:	loop   0x799f <task0+20>
+   0x000079a1 <+22>:	mov    $0x20,%al
+   0x000079a3 <+24>:	int    $0x81
+   0x000079a5 <+26>:	mov    $0xffff,%ecx
+   0x000079aa <+31>:	loop   0x79aa <task0+31>
+   0x000079ac <+33>:	ret    
+End of assembler dump.
+
+(gdb)si
+0x0000798d in task0 ()
+
+(gdb)disas
+Dump of assembler code for function task0:
+   0x0000798b <+0>:	mov    $0x30,%al
+=> 0x0000798d <+2>:	int    $0x81
+   0x0000798f <+4>:	mov    $0xffff,%ecx
+   0x00007994 <+9>:	loop   0x7994 <task0+9>
+   0x00007996 <+11>:	mov    $0x20,%al
+   0x00007998 <+13>:	int    $0x81
+   0x0000799a <+15>:	mov    $0xffff,%ecx
+   0x0000799f <+20>:	loop   0x799f <task0+20>
+   0x000079a1 <+22>:	mov    $0x20,%al
+   0x000079a3 <+24>:	int    $0x81
+   0x000079a5 <+26>:	mov    $0xffff,%ecx
+   0x000079aa <+31>:	loop   0x79aa <task0+31>
+   0x000079ac <+33>:	ret    
+End of assembler dump.
+
+(gdb)info registers 
+eax            0x30	48
+ecx            0x55f0	22000
+edx            0x21	33
+ebx            0x90080	589952
+esp            0x22bcc	0x22bcc <user_stack+4012>
+ebp            0x22c0c	0x22c0c <user_stack+4076>
+esi            0x900a0	589984
+edi            0x21c20	138272
+eip            0x798d	0x798d <task0+2>
+eflags         0x202	[ IF ]
+cs             0xf	15
+ss             0x17	23
+ds             0x17	23
+es             0x17	23
+fs             0x17	23
+gs             0x17	23
+
+(gdb)si
+0x00007970 in display_interrupt ()
+
+(gdb)info registers 
+eax            0x30	48
+ecx            0x55f0	22000
+edx            0x21	33
+ebx            0x90080	589952
+esp            0x1ceac	0x1ceac <init_task+4076>
+ebp            0x22c0c	0x22c0c <user_stack+4076>
+esi            0x900a0	589984
+edi            0x21c20	138272
+eip            0x7970	0x7970 <display_interrupt>
+eflags         0x202	[ IF ]
+cs             0x8	8
+ss             0x10	16
+ds             0x17	23
+es             0x17	23
+fs             0x17	23
+gs             0x17	23
+
+//查看栈顶内容（核心栈）
+(gdb)x/5wx $esp
+0x1ceac <init_task+4076>:	0x0000798f	0x0000000f	0x00000202	0x00022bcc
+0x1cebc <init_task+4092>:	0x00000017
+
+//查看中断描述符表，及其中的0x81中断的描述符
+(gdb)p idt
+$1 = {<text variable, no debug info>} 0x54c0 <idt>
+
+(gdb)x/2wx idt+8*0x81
+0x58c8 <idt+1032>:	0x00087970	0x0000ef00
+  可见其中存放的中断处理程序的地址为：0x0008:0x00007970，即函数display_interrupt的入口地址。
+
+(gdb)

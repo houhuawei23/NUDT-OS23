@@ -1,0 +1,330 @@
+演示5.1：#1进程的变量mynext的地址
+分析对象：版本1.5内核
+
+本实验用到的命令汇总：
+--------------------------------------------------------------
+nudt@uvm:~/os/linux-0.11-lab/1.5/linux$ gdb tools/system -x ../../0.gdb
+(gdb) source ../../5-1.gdb
+(gdb) c
+(gdb) c
+(gdb) p &mynext
+(gdb) p mynext
+(gdb) si
+(gdb) p $eax
+(gdb) c
+(gdb) kill
+(gdb) quit
+
+nudt@uvm:~/os/linux-0.11-lab$ ./rundbg
+<bochs:1> b 0x699f
+<bochs:2> c
+<bochs:3> c
+<bochs:4> sreg
+<bochs:5> x 0x17:0x1fcac
+<bochs:6> quit
+
+nudt@uvm:~/os/linux-0.11-lab/1.5/linux$ gdb tools/system -x ../../0.gdb
+(gdb) source ../../5-1.gdb
+(gdb) info breakpoints 
+(gdb) c
+(gdb) x/5i $eip
+(gdb) c
+(gdb) x/5i $eip
+(gdb) p mynext
+(gdb) p &mynext
+(gdb) x/wx 0x1fcac+0x4000000
+(gdb) p/x current->start_code
+(gdb) x/wx current->start_code+(void *)&mynext
+(gdb) commands 2
+(gdb) c
+(gdb) c
+(gdb) c
+(gdb) c
+
+
+文件~/os/linux-0.11-lab/0.gdb的内容：
+--------------------------------------------------------------
+target remote localhost:1234
+handle SIGSEGV nostop noprint ignore
+b main
+display current->pid
+c
+
+
+文件~/os/linux-0.11-lab/5-1.gdb的内容：
+--------------------------------------------------------------
+display mynext
+b main.c:155
+
+
+调试过程：
+--------------------------------------------------------------
+nudt@uvm:~/os/linux-0.11-lab/1.5/linux$ gdb tools/system -x ../../0.gdb
+GNU gdb (GDB) 7.6.1-ubuntu
+Copyright (C) 2013 Free Software Foundation, Inc.
+License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>
+This is free software: you are free to change and redistribute it.
+There is NO WARRANTY, to the extent permitted by law.  Type "show copying"
+and "show warranty" for details.
+This GDB was configured as "i686-linux-gnu".
+For bug reporting instructions, please see:
+<http://www.gnu.org/software/gdb/bugs/>...
+Reading symbols from /mnt/hgfs/u/os-exp/20spring-os/linux-0.11-lab/1.5/linux/tools/system...done.
+0x0000fff0 in match (len=0, name=0x0 <startup_32>, de=0x0 <startup_32>)
+    at namei.c:71
+71		__asm__("cld\n\t"
+Breakpoint 1 at 0x680b: file init/main.c, line 116.
+
+Breakpoint 1, main () at init/main.c:116
+116	{			/* The startup routine assumes (well, ...) this */
+1: current->pid = 0
+
+(gdb) source ../../5-1.gdb
+Breakpoint 2 at 0x699f: file init/main.c, line 155.
+
+(gdb) c
+Continuing.
+
+Breakpoint 2, main () at init/main.c:155
+155					output_char('A' + mynext);
+2: mynext = 1
+1: current->pid = 1
+=> 0x699f <main+404>:	mov    0x1fcac,%eax
+   0x69a4 <main+409>:	add    $0x41,%eax
+   0x69a7 <main+412>:	movsbl %al,%eax
+   0x69aa <main+415>:	mov    %eax,(%esp)
+   0x69ad <main+418>:	call   0x7a17 <output_char>
+
+(gdb) c
+Continuing.
+
+Breakpoint 2, main () at init/main.c:155
+155					output_char('A' + mynext);
+2: mynext = 7
+1: current->pid = 1
+=> 0x699f <main+404>:	mov    0x1fcac,%eax
+   0x69a4 <main+409>:	add    $0x41,%eax
+   0x69a7 <main+412>:	movsbl %al,%eax
+   0x69aa <main+415>:	mov    %eax,(%esp)
+   0x69ad <main+418>:	call   0x7a17 <output_char>
+
+(gdb) p &mynext
+$1 = (int *) 0x1fcac <mynext>
+
+(gdb) p mynext
+$2 = 7
+
+(gdb) si
+0x000069a4	155					output_char('A' + mynext);
+2: mynext = 7
+1: current->pid = 1
+
+(gdb) p $eax
+$3 = 2
+
+(gdb) c
+Continuing.
+
+Breakpoint 2, main () at init/main.c:155
+155					output_char('A' + mynext);
+2: mynext = 7
+1: current->pid = 1
+=> 0x699f <main+404>:	mov    0x1fcac,%eax
+   0x69a4 <main+409>:	add    $0x41,%eax
+   0x69a7 <main+412>:	movsbl %al,%eax
+   0x69aa <main+415>:	mov    %eax,(%esp)
+   0x69ad <main+418>:	call   0x7a17 <output_char>
+
+(gdb) kill
+Kill the program being debugged? (y or n) y
+
+(gdb) quit
+nudt@uvm:~/os/linux-0.11-lab/1.5/linux$ cd ../..
+
+nudt@uvm:~/os/linux-0.11-lab$ ./rundbg
+========================================================================
+                       Bochs x86 Emulator 2.6.9
+               Built from SVN snapshot on April 9, 2017
+                  Compiled on Apr 24 2020 at 16:32:41
+========================================================================
+00000000000i[      ] BXSHARE not set. using compile time default '/usr/local/share/bochs'
+00000000000i[      ] reading configuration from conf/0.11.bxrc
+00000000000i[      ] installing x module as the Bochs GUI
+00000000000i[      ] using log file bochsout.txt
+Next at t=0
+(0) [0x0000fffffff0] f000:fff0 (unk. ctxt): jmpf 0xf000:e05b          ; ea5be000f0
+
+<bochs:1> b 0x699f
+
+<bochs:2> c
+(0) Breakpoint 1, 0x0400699f in ?? ()
+Next at t=116317714
+(0) [0x00000000699f] 000f:0000699f (unk. ctxt): mov eax, dword ptr ds:0x0001fcac ; a1acfc0100
+<bochs:3> c
+(0) Breakpoint 1, 0x0400699f in ?? ()
+Next at t=131580101
+(0) [0x00000000699f] 000f:0000699f (unk. ctxt): mov eax, dword ptr ds:0x0001fcac ; a1acfc0100
+
+<bochs:4> sreg
+es:0x0017, dh=0x04c0f300, dl=0x0000009f, valid=1
+	Data segment, base=0x04000000, limit=0x0009ffff, Read/Write, Accessed
+cs:0x000f, dh=0x04c0fb00, dl=0x0000009f, valid=1
+	Code segment, base=0x04000000, limit=0x0009ffff, Execute/Read, Non-Conforming, Accessed, 32-bit
+ss:0x0017, dh=0x04c0f300, dl=0x0000009f, valid=7
+	Data segment, base=0x04000000, limit=0x0009ffff, Read/Write, Accessed
+ds:0x0017, dh=0x04c0f300, dl=0x0000009f, valid=3
+	Data segment, base=0x04000000, limit=0x0009ffff, Read/Write, Accessed
+fs:0x0017, dh=0x04c0f300, dl=0x0000009f, valid=1
+	Data segment, base=0x04000000, limit=0x0009ffff, Read/Write, Accessed
+gs:0x0017, dh=0x04c0f300, dl=0x0000009f, valid=1
+	Data segment, base=0x04000000, limit=0x0009ffff, Read/Write, Accessed
+ldtr:0x0038, dh=0x000082ff, dl=0xf2d00068, valid=1
+tr:0x0030, dh=0x00008bff, dl=0xf2e80068, valid=1
+gdtr:base=0x00005cc0, limit=0x7ff
+idtr:base=0x000054c0, limit=0x7ff
+
+<bochs:5> x 0x17:0x1fcac
+[bochs]:
+0x0401fcac <bogus+       0>:	0x00000002
+
+<bochs:6> x 0x1fcac
+[bochs]:
+0x0001fcac <bogus+       0>:	0x00000007
+
+<bochs:7> quit
+(0).[131580101] [0x00000000699f] 000f:0000699f (unk. ctxt): mov eax, dword ptr ds:0x0001fcac ; a1acfc0100
+
+nudt@uvm:~/os/linux-0.11-lab$ 
+
+
+//其实在gdb中也可以查看变量的值，方法如下：
+//切换回gdb调试模式，再次跟踪到0x699f的第2次执行：
+<bochs:6> quit
+(0).[131580101] [0x00000000699f] 000f:0000699f (unk. ctxt): mov eax, dword ptr ds:0x0001fcac ; a1acfc0100
+
+nudt@uvm:~/os/linux-0.11-lab/1.5/linux$ gdb tools/system -x ../../0.gdb
+GNU gdb (GDB) 7.6.1-ubuntu
+Copyright (C) 2013 Free Software Foundation, Inc.
+License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>
+This is free software: you are free to change and redistribute it.
+There is NO WARRANTY, to the extent permitted by law.  Type "show copying"
+and "show warranty" for details.
+This GDB was configured as "i686-linux-gnu".
+For bug reporting instructions, please see:
+<http://www.gnu.org/software/gdb/bugs/>...
+Reading symbols from /mnt/hgfs/u/os-exp/20spring-os/linux-0.11-lab/1.5/linux/tools/system...done.
+0x0000fff0 in match (len=0, name=0x0 <startup_32>, de=0x0 <startup_32>)
+    at namei.c:71
+71		__asm__("cld\n\t"
+Breakpoint 1 at 0x680b: file init/main.c, line 116.
+
+Breakpoint 1, main () at init/main.c:116
+116	{			/* The startup routine assumes (well, ...) this */
+1: current->pid = 0
+
+(gdb) source ../../5-1.gdb
+Breakpoint 2 at 0x699f: file init/main.c, line 155.
+Breakpoint 3 at 0x6a12: file init/main.c, line 172.
+
+(gdb) info breakpoints 
+Num     Type           Disp Enb Address    What
+1       breakpoint     keep y   0x0000680b in main at init/main.c:116
+	breakpoint already hit 1 time
+2       breakpoint     keep y   0x0000699f in main at init/main.c:155
+
+(gdb) c
+Continuing.
+
+Breakpoint 2, main () at init/main.c:155
+155					output_char('A' + mynext);
+2: mynext = 1
+1: current->pid = 1
+
+(gdb) x/5i $eip
+=> 0x699f <main+404>:	mov    0x1fcac,%eax
+   0x69a4 <main+409>:	add    $0x41,%eax
+   0x69a7 <main+412>:	movsbl %al,%eax
+   0x69aa <main+415>:	mov    %eax,(%esp)
+   0x69ad <main+418>:	call   0x7a17 <output_char>
+  第一次执行到地址0x699f
+
+(gdb) c
+Continuing.
+
+Breakpoint 2, main () at init/main.c:155
+155					output_char('A' + mynext);
+2: mynext = 7
+1: current->pid = 1
+
+(gdb) x/5i $eip
+=> 0x699f <main+404>:	mov    0x1fcac,%eax
+   0x69a4 <main+409>:	add    $0x41,%eax
+   0x69a7 <main+412>:	movsbl %al,%eax
+   0x69aa <main+415>:	mov    %eax,(%esp)
+   0x69ad <main+418>:	call   0x7a17 <output_char>
+  第二次执行到此
+
+//直接查看1号进程的mynext变量
+(gdb) p mynext
+$1 = 7
+  不准
+
+(gdb) p &mynext
+$2 = (int *) 0x1fcac <mynext>
+
+//可以这样查看
+(gdb) x/wx 0x1fcac+0x4000000
+0x401fcac:	0x00000002
+  准确了
+
+//也可以这样查看
+(gdb) p/x current->start_code
+$3 = 0x4000000
+
+(gdb) x/wx current->start_code+(void *)&mynext
+0x401fcac:	0x00000002
+
+//设置自动显示变量的值
+(gdb) commands 2
+Type commands for breakpoint(s) 2, one per line.
+End with a line saying just "end".
+>x/wx current->start_code+(void *)&mynext
+>end
+
+(gdb) c
+Continuing.
+
+Breakpoint 2, main () at init/main.c:155
+155					output_char('A' + mynext);
+2: mynext = 7
+1: current->pid = 1
+0x401fcac:	0x00000003
+  此时屏幕上将显示字符’D‘
+
+(gdb) c
+Continuing.
+
+Breakpoint 2, main () at init/main.c:155
+155					output_char('A' + mynext);
+2: mynext = 7
+1: current->pid = 1
+0x401fcac:	0x00000004
+
+(gdb) c
+Continuing.
+
+Breakpoint 2, main () at init/main.c:155
+155					output_char('A' + mynext);
+2: mynext = 7
+1: current->pid = 1
+0x401fcac:	0x00000005
+
+(gdb) c
+Continuing.
+
+Breakpoint 2, main () at init/main.c:155
+155					output_char('A' + mynext);
+2: mynext = 7
+1: current->pid = 1
+0x401fcac:	0x00000006
+
